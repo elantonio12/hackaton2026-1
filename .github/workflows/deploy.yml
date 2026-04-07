@@ -1,0 +1,37 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: [self-hosted, hackaton]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run tests
+        run: cd backend && python -m pytest tests/ -v
+
+  deploy:
+    needs: test
+    runs-on: [self-hosted, hackaton]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        run: |
+          cd ${{ github.workspace }}
+          cp .env.example .env 2>/dev/null || true
+          docker compose down
+          docker compose build --no-cache
+          docker compose up -d
+          docker compose ps

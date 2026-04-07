@@ -1,0 +1,13 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sqlalchemy==2.0.40
+asyncpg==0.30.0
+geoalchemy2==0.17.1
+pydantic==2.11.3
+pydantic-settings==2.9.1
+ortools==9.12.4544
+networkx==3.4.2
+ibm-watsonx-ai==1.3.8
+httpx==0.28.1
+python-dotenv==1.1.0
+alembic==1.15.2
