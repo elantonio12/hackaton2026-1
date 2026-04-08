@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+@theme {
+  /* EcoRuta Palette */
+  --color-eco-green: #16a34a;
+  --color-eco-green-light: #22c55e;
+  --color-eco-green-dark: #15803d;
+  --color-eco-bg: #f9fafb;
+  --color-eco-bg-panel: #ffffff;
+  --color-eco-bg-header: #f3f4f6;
+  --color-eco-text-primary: #111827;
+  --color-eco-text-secondary: #6b7280;
+  --color-eco-border: #e5e7eb;
+  --color-eco-danger: #ef4444;
+  --color-eco-info: #3b82f6;
+  --color-eco-warning: #f59e0b;
+}
+
+html {
+  background-color: var(--color-eco-bg);
+}
+
+body {
+  @apply bg-eco-bg text-eco-text-primary font-sans antialiased;
+}
+
+/* PWA viewport height: JS sets --app-height to window.innerHeight */
+.h-app {
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+}
+
+/* Safe area padding for devices with system navigation bars */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
