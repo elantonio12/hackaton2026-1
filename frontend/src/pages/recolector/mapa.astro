@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import MapView from '../../components/MapView.astro';
 ---
 
 <Layout title="Mapa de Ruta">
@@ -25,7 +26,7 @@ import Layout from '../../layouts/Layout.astro';
     </header>
 
     <!-- Map fills remaining space -->
-    <div id="map" class="flex-1 z-0"></div>
+    <MapView id="map" height="flex-1" />
 
     <!-- Bottom info bar -->
     <div id="info-bar" class="bg-eco-bg-panel border-t border-eco-border px-4 py-3 flex items-center justify-between text-sm hidden">
@@ -36,18 +37,10 @@ import Layout from '../../layouts/Layout.astro';
   </div>
 </Layout>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
 <script>
-  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
-
-  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
-
-  const map = L.map('map', { zoomControl: true }).setView([19.432, -99.133], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap',
-    maxZoom: 18,
-  }).addTo(map);
+  const L = (window as any).__L__;
+  const map = (window as any).__maps__?.['map'];
+  const API = window.__API__;
 
   function markerColor(fill: number) {
     if (fill >= 0.8) return '#ef4444';

@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import '@tailwindplus/elements';
 
 interface Props {
   title: string;
@@ -22,6 +23,8 @@ const { title } = Astro.props;
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>{title} | EcoRuta</title>
     <script is:inline>
+      /* Global API root — single source of truth for client scripts */
+      window.__API__ = 'https://apihackaton.syle.studio';
       /* PWA viewport fix: set --app-height from window.innerHeight */
       function setAppHeight() {
         document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');

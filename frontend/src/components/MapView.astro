@@ -1,0 +1,55 @@
+---
+/**
+ * Reusable Leaflet map component.
+ *
+ * Props:
+ *   id       - DOM id for the map container (default: "map")
+ *   height   - CSS height class (default: "h-64")
+ *   center   - [lat, lng] (default: [19.432, -99.133])
+ *   zoom     - initial zoom (default: 12)
+ */
+interface Props {
+  id?: string;
+  height?: string;
+  center?: [number, number];
+  zoom?: number;
+}
+
+const {
+  id = 'map',
+  height = 'h-64',
+  center = [19.432, -99.133],
+  zoom = 12,
+} = Astro.props;
+---
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<div id={id} class={`w-full ${height} rounded-lg z-0`}
+  data-center={JSON.stringify(center)}
+  data-zoom={zoom}
+></div>
+
+<script>
+  /**
+   * Initialize all MapView instances on the page.
+   * Exposes window.__maps__ = { [id]: L.map } for scripts to add markers.
+   */
+  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
+
+  (window as any).__L__ = L;
+  (window as any).__maps__ = (window as any).__maps__ || {};
+
+  document.querySelectorAll('[data-center]').forEach((el: any) => {
+    if ((window as any).__maps__[el.id]) return; // already init
+    const center = JSON.parse(el.dataset.center);
+    const zoom = parseInt(el.dataset.zoom) || 12;
+
+    const map = L.map(el.id, { zoomControl: true }).setView(center, zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 18,
+    }).addTo(map);
+
+    (window as any).__maps__[el.id] = map;
+  });
+</script>

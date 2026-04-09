@@ -7,7 +7,7 @@
     <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Rutas optimizadas</h2>
     <button
       id="optimize-btn"
-      class="text-xs px-3 py-1 rounded-lg bg-eco-green text-white font-medium active:scale-95 transition-transform"
+      class="btn btn-primary text-xs px-3 py-1"
     >
       Generar rutas
     </button>
@@ -26,8 +26,7 @@
     list.innerHTML = '<li class="text-xs text-eco-text-secondary">Calculando rutas con IA...</li>';
 
     try {
-      const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
-      const res = await fetch(`${API}/api/v1/routes/optimize`, {
+      const res = await fetch(`${window.__API__}/api/v1/routes/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

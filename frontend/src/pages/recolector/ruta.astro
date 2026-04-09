@@ -25,7 +25,7 @@ import Layout from '../../layouts/Layout.astro';
       <div id="route-status" class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-2">
         <div class="flex items-center justify-between">
           <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Tu ruta de hoy</span>
-          <button id="generate-btn" class="text-xs px-3 py-1 rounded-lg bg-eco-green text-white font-medium active:scale-95 transition-transform">
+          <button id="generate-btn" class="btn btn-primary text-xs px-3 py-1">
             Generar ruta
           </button>
         </div>
@@ -58,7 +58,7 @@ import Layout from '../../layouts/Layout.astro';
 </Layout>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+  const API = window.__API__;
 
   document.getElementById('generate-btn')!.addEventListener('click', async () => {
     const btn = document.getElementById('generate-btn') as HTMLButtonElement;

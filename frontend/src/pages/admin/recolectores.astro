@@ -4,8 +4,8 @@ import '../../styles/auth.css';
 ---
 
 <Layout title="Gestionar Usuarios">
-  <main class="auth-main" style="padding-top: 2rem; padding-bottom: 2rem;">
-    <div class="auth-card" style="max-width: 32rem;">
+  <main class="auth-main py-8">
+    <div class="auth-card max-w-lg">
       <div class="auth-header">
         <h1 class="auth-title">Invitar Usuario</h1>
         <p class="auth-subtitle">Crea cuentas para recolectores y administradores</p>
@@ -13,11 +13,11 @@ import '../../styles/auth.css';
 
       <div id="error-banner" class="auth-error" style="display: none;"></div>
 
-      <div id="success-banner" style="display: none; background-color: rgba(34, 197, 94, 0.1); color: #16a34a; padding: 1rem; border-radius: 0.75rem; margin-bottom: 1rem;">
-        <p style="font-weight: 600; margin-bottom: 0.5rem;">Usuario creado exitosamente</p>
-        <p style="font-size: 0.875rem; margin-bottom: 0.25rem;">Correo: <strong id="created-email"></strong></p>
-        <p style="font-size: 0.875rem;">Contrasena temporal: <strong id="created-password" style="font-family: monospace; background: rgba(34,197,94,0.15); padding: 0.25rem 0.5rem; border-radius: 0.25rem;"></strong></p>
-        <p style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.8;">Comparte estas credenciales con el usuario.</p>
+      <div id="success-banner" class="alert alert-success mb-4 text-left" style="display: none;">
+        <p class="font-semibold mb-1">Usuario creado exitosamente</p>
+        <p class="text-sm mb-0.5">Correo: <strong id="created-email"></strong></p>
+        <p class="text-sm">Contrasena temporal: <strong id="created-password" class="font-mono bg-eco-green/10 px-1.5 py-0.5 rounded"></strong></p>
+        <p class="text-xs mt-2 opacity-80">Comparte estas credenciales con el usuario.</p>
       </div>
 
       <form id="invite-form" class="auth-form">

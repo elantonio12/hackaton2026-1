@@ -13,8 +13,7 @@
   async function loadReports() {
     const list = document.getElementById('report-list')!;
     try {
-      const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
-      const res  = await fetch(`${API}/api/v1/reports/citizen`);
+      const res  = await fetch(`${window.__API__}/api/v1/reports/citizen`);
       const data: any[] = await res.json();
 
       if (data.length === 0) {

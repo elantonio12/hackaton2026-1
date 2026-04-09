@@ -166,45 +166,30 @@ body:has(.auth-main) {
     height: 1.25rem;
 }
 
+/* Auth inputs extend the shared .input class — auth pages apply both */
 .auth-input {
-    width: 100%;
+    composes: input from global;
     padding: 0.75rem 1rem;
-    border-radius: 0.75rem;
-    border: 1px solid var(--color-eco-border, #e5e7eb);
-    background-color: var(--color-eco-bg, #f9fafb);
-    color: var(--color-eco-text-primary, #111827);
     font-size: 1rem;
-    outline: none;
-    transition: all 0.2s ease;
-    box-sizing: border-box;
 }
 
 .auth-input.has-icon {
     padding-right: 2.75rem;
 }
 
-.auth-input:focus {
-    border-color: var(--color-eco-green, #16a34a);
-    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
-    background-color: var(--color-eco-bg-panel, #ffffff);
-}
-
-.auth-input::placeholder {
-    color: #9ca3af;
-}
-
+/* Auth buttons extend .btn .btn-primary from global.css */
 .auth-button {
     width: 100%;
-    background: linear-gradient(135deg, var(--color-eco-green-light, #22c55e), var(--color-eco-green-dark, #15803d));
+    background-color: var(--color-eco-green);
     color: white;
-    font-weight: 700;
+    font-weight: 600;
     padding: 0.75rem 1rem;
     border-radius: 0.75rem;
-    box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.3), 0 2px 4px -1px rgba(34, 197, 94, 0.2);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     border: none;
     cursor: pointer;
     font-size: 1rem;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     margin-top: 0.5rem;
     text-align: center;
     display: block;
@@ -212,22 +197,22 @@ body:has(.auth-main) {
     box-sizing: border-box;
 }
 
-.auth-button-info {
-    background: linear-gradient(135deg, var(--color-eco-info, #3b82f6), #2563eb);
-    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3), 0 2px 4px -1px rgba(59, 130, 246, 0.2);
-}
-
 .auth-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(34, 197, 94, 0.4), 0 4px 6px -2px rgba(34, 197, 94, 0.2);
+    background-color: var(--color-eco-green-dark);
 }
 
-.auth-button-info:hover {
-    box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.4), 0 4px 6px -2px rgba(59, 130, 246, 0.2);
+.auth-button:focus-visible {
+    outline: 2px solid var(--color-eco-green);
+    outline-offset: 2px;
 }
 
 .auth-button:active {
-    transform: translateY(0);
+    transform: scale(0.98);
+}
+
+.auth-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .auth-footer {

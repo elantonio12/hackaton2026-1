@@ -27,7 +27,7 @@ import Layout from '../../layouts/Layout.astro';
 
         <div class="flex flex-col gap-1">
           <label for="zone" class="text-xs text-eco-text-secondary">Zona</label>
-          <select id="zone" class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary">
+          <select id="zone" class="input">
             <option value="centro">Centro</option>
             <option value="norte">Norte</option>
             <option value="sur">Sur</option>
@@ -36,17 +36,17 @@ import Layout from '../../layouts/Layout.astro';
 
         <div class="flex flex-col gap-1">
           <label for="description" class="text-xs text-eco-text-secondary">Descripción</label>
-          <textarea id="description" rows="3" placeholder="Ej: Contenedor desbordado en la esquina..." class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary resize-none"></textarea>
+          <textarea id="description" rows="3" placeholder="Ej: Contenedor desbordado en la esquina..." class="input resize-none"></textarea>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div class="flex flex-col gap-1">
             <label for="lat" class="text-xs text-eco-text-secondary">Latitud</label>
-            <input id="lat" type="number" step="any" placeholder="19.4326" class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary"/>
+            <input id="lat" type="number" step="any" placeholder="19.4326" class="input"/>
           </div>
           <div class="flex flex-col gap-1">
             <label for="lng" class="text-xs text-eco-text-secondary">Longitud</label>
-            <input id="lng" type="number" step="any" placeholder="-99.1332" class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary"/>
+            <input id="lng" type="number" step="any" placeholder="-99.1332" class="input"/>
           </div>
         </div>
 
@@ -54,7 +54,7 @@ import Layout from '../../layouts/Layout.astro';
           Usar mi ubicación actual
         </button>
 
-        <button id="submit-btn" class="w-full py-2.5 rounded-lg bg-eco-green text-white font-medium text-sm active:scale-[0.98] transition-transform">
+        <button id="submit-btn" class="btn btn-primary w-full">
           Enviar reporte
         </button>
 
@@ -74,7 +74,7 @@ import Layout from '../../layouts/Layout.astro';
 </Layout>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+  const API = window.__API__;
 
   // Geolocation
   document.getElementById('locate-btn')!.addEventListener('click', () => {

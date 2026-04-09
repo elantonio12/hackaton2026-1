@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import MapView from '../../components/MapView.astro';
 ---
 
 <Layout title="Mi Zona">
@@ -58,7 +59,7 @@ import Layout from '../../layouts/Layout.astro';
       <!-- Map -->
       <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
         <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Contenedores en tu zona</h2>
-        <div id="map" class="w-full h-56 rounded-lg z-0"></div>
+        <MapView id="map" height="h-56" />
         <div class="flex gap-4 text-xs text-eco-text-secondary">
           <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-eco-danger inline-block"></span>Lleno</span>
           <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-eco-warning inline-block"></span>Medio</span>
@@ -78,15 +79,12 @@ import Layout from '../../layouts/Layout.astro';
   </div>
 </Layout>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
 <script>
-  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
-
-  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+  const L = (window as any).__L__;
+  const API = window.__API__;
   let currentZone = 'centro';
   let allContainers: any[] = [];
-  let mapInstance: any = null;
+  let mapInstance: any = (window as any).__maps__?.['map'];
   let markers: any[] = [];
 
   // Zone centers
@@ -96,12 +94,7 @@ import Layout from '../../layouts/Layout.astro';
     sur:    [19.35, -99.16],
   };
 
-  // Init map
-  mapInstance = L.map('map', { zoomControl: true }).setView(ZONE_CENTER.centro, 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap',
-    maxZoom: 18,
-  }).addTo(mapInstance);
+  mapInstance?.setView(ZONE_CENTER.centro, 13);
 
   function markerColor(fill: number) {
     if (fill >= 0.8) return '#ef4444';

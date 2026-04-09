@@ -2,7 +2,10 @@
  * API client and auth utilities for EcoRuta frontend.
  */
 
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://apihackaton.syle.studio/api/v1';
+/** Root URL of the backend (no trailing slash, no /api/v1). */
+export const API_ROOT = import.meta.env.PUBLIC_API_URL || 'https://apihackaton.syle.studio';
+
+const API_BASE = `${API_ROOT}/api/v1`;
 
 // ---------------------------------------------------------------------------
 // JWT / localStorage helpers

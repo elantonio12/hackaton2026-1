@@ -19,8 +19,7 @@
   async function loadCritical() {
     const list = document.getElementById('critical-list')!;
     try {
-      const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
-      const res = await fetch(`${API}/api/v1/containers/critical?threshold=0.8`);
+      const res = await fetch(`${window.__API__}/api/v1/containers/critical?threshold=0.8`);
       const data = await res.json();
       const containers: any[] = data.containers ?? [];
 
