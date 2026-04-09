@@ -33,11 +33,11 @@ app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 async def startup():
     from sqlalchemy import select
 
-    from app.db.database import async_session, sync_schema
+    from app.db.database import async_session, run_migrations
     from app.db.models import Sensor
 
-    # 1. Sync schema (create tables + add missing columns)
-    await sync_schema()
+    # 1. Run Alembic migrations
+    await run_migrations()
 
     # 2. Seed admin user
     async with async_session() as db:
