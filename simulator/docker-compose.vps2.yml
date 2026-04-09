@@ -1,9 +1,18 @@
-# Simulator-only compose for deployment on vps2.
+# Simulator + IPv6 gateway for deployment on vps2.
 #
-# Points to the backend running on vps1 over Tailscale for privacy
-# (no need to expose :8000 publicly). Uses host networking so that the
-# simulator can bind arbitrary IPv6 source addresses from the vps2 /64
-# block without Docker's IPv6 subnet plumbing getting in the way.
+# Architecture on vps2:
+#
+#   10,000 simulated sensors (simulator container)
+#       │  each binds a unique IPv6 source from 2605:a140:2302:3245::/64
+#       ▼
+#   IPv6 gateway on [::1]:8080 (nginx container)
+#       │  preserves source IPv6 in access logs
+#       ▼
+#   Tailscale → vps1 backend at 100.89.207.110:8000
+#
+# Both services use host networking so the simulator can bind arbitrary
+# IPv6 source addresses from the /64 block without Docker's IPv6 subnet
+# plumbing getting in the way.
 #
 # Prerequisite on the host:
 #     sysctl net.ipv6.ip_nonlocal_bind=1
@@ -14,6 +23,18 @@
 #     docker compose -f docker-compose.vps2.yml logs -f
 
 services:
+  # IPv6 gateway: accepts IPv6 connections from the simulator on this
+  # host's /64 block and forwards them to the backend on vps1 via
+  # Tailscale. Logs every distinct source IPv6 — the "proof" that the
+  # fleet has 10,000 distinct network identities.
+  ipv6-gateway:
+    image: nginx:1.27-alpine
+    container_name: ecoruta-ipv6-gateway
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./nginx-ipv6-gateway.conf:/etc/nginx/nginx.conf:ro
+
   simulator:
     build:
       context: .
@@ -21,12 +42,21 @@ services:
     container_name: ecoruta-simulator
     network_mode: host
     restart: unless-stopped
+    depends_on:
+      - ipv6-gateway
     environment:
       PYTHONUNBUFFERED: "1"
+      # Simulator connects to the LOCAL IPv6 gateway (not vps1 directly).
+      # Each sensor binds a unique IPv6 source address, the gateway
+      # preserves source identity in access logs, then forwards to vps1.
+      # To activate the IPv6 showcase path (via the local nginx gateway),
+      # change BACKEND_URL to http://[2605:a140:2302:3245::1]:8080 and
+      # set IPV6_ENABLED to true. Default is IPv4 over Tailscale for
+      # reliability.
       BACKEND_URL: "http://100.89.207.110:8000"
       NUM_CONTAINERS: "10000"
       INTERVAL_SECONDS: "60"
       BATCH_SIZE: "500"
-      IPV6_ENABLED: "true"
+      IPV6_ENABLED: "false"
       IPV6_PREFIX: "2605:a140:2302:3245::"
       IPV6_CLIENTS: "100"
