@@ -8,19 +8,10 @@ class Settings(BaseSettings):
     watsonx_url: str = "https://us-south.ml.cloud.ibm.com"
     allowed_origins: list[str] = ["*"]
 
-    # Google OAuth
-    google_client_id: str = ""
-    google_client_secret: str = ""
-
     # JWT
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 60 * 24  # 24 hours
-
-    # Resend (transactional email)
-    resend_api_key: str = ""
-    resend_from_email: str = "EcoRuta <noreply@mail.syle.studio>"
-    frontend_url: str = "https://hackaton2026.syle.studio"
 
     # Sensor API key
     sensor_api_key: str = "ecoruta-sensor-secret-2026"

@@ -31,6 +31,9 @@ app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 
 @app.on_event("startup")
 async def startup():
+    # Seed default admin user
+    auth.seed_admin()
+
     # Seed sensor registry
     sensors.seed_sensor_registry()
 

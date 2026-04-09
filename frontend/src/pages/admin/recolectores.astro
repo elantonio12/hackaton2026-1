@@ -1,10 +1,107 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import '../../styles/auth.css';
 ---
 
-<Layout title="Registro de Recolectores">
-  <main class="h-full overflow-y-auto p-6">
-    <h1 class="text-2xl font-bold text-eco-text-primary mb-6">Registro de Recolectores</h1>
-    <!-- TODO: CRUD de recolectores -->
+<Layout title="Gestionar Usuarios">
+  <main class="auth-main" style="padding-top: 2rem; padding-bottom: 2rem;">
+    <div class="auth-card" style="max-width: 32rem;">
+      <div class="auth-header">
+        <h1 class="auth-title">Invitar Usuario</h1>
+        <p class="auth-subtitle">Crea cuentas para recolectores y administradores</p>
+      </div>
+
+      <div id="error-banner" class="auth-error" style="display: none;"></div>
+
+      <div id="success-banner" style="display: none; background-color: rgba(34, 197, 94, 0.1); color: #16a34a; padding: 1rem; border-radius: 0.75rem; margin-bottom: 1rem;">
+        <p style="font-weight: 600; margin-bottom: 0.5rem;">Usuario creado exitosamente</p>
+        <p style="font-size: 0.875rem; margin-bottom: 0.25rem;">Correo: <strong id="created-email"></strong></p>
+        <p style="font-size: 0.875rem;">Contrasena temporal: <strong id="created-password" style="font-family: monospace; background: rgba(34,197,94,0.15); padding: 0.25rem 0.5rem; border-radius: 0.25rem;"></strong></p>
+        <p style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.8;">Comparte estas credenciales con el usuario.</p>
+      </div>
+
+      <form id="invite-form" class="auth-form">
+        <div class="auth-form-group">
+          <label for="name" class="auth-label">Nombre Completo</label>
+          <input type="text" id="name" class="auth-input" placeholder="Juan Perez" required />
+        </div>
+
+        <div class="auth-form-group">
+          <label for="email" class="auth-label">Correo Electronico</label>
+          <input type="email" id="email" class="auth-input" placeholder="usuario@correo.com" required />
+        </div>
+
+        <div class="auth-form-group">
+          <label for="role" class="auth-label">Rol</label>
+          <select id="role" class="auth-input" required>
+            <option value="collector">Recolector</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+
+        <button type="submit" class="auth-button" id="submit-btn">
+          Crear Usuario
+        </button>
+      </form>
+
+      <div style="margin-top: 1.5rem; text-align: center;">
+        <a href="/admin" class="auth-link" style="font-size: 0.875rem;">Volver al Dashboard</a>
+      </div>
+    </div>
   </main>
 </Layout>
+
+<script>
+  import { apiInviteUser, isAuthenticated, getUser } from '../../lib/api';
+
+  if (!isAuthenticated()) {
+    window.location.href = '/auth/login';
+  } else {
+    const user = getUser();
+    if (!user || user.role !== 'admin') {
+      window.location.href = '/auth/login';
+    }
+  }
+
+  const inviteForm = document.getElementById('invite-form');
+  const errorBanner = document.getElementById('error-banner');
+  const successBanner = document.getElementById('success-banner');
+  const createdEmail = document.getElementById('created-email');
+  const createdPassword = document.getElementById('created-password');
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+
+  if (inviteForm) {
+    inviteForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorBanner) errorBanner.style.display = 'none';
+      if (successBanner) successBanner.style.display = 'none';
+
+      const name = (document.getElementById('name') as HTMLInputElement).value;
+      const email = (document.getElementById('email') as HTMLInputElement).value;
+      const role = (document.getElementById('role') as HTMLSelectElement).value;
+
+      const originalText = submitBtn.innerText;
+      submitBtn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Creando...`;
+      submitBtn.disabled = true;
+
+      try {
+        const data = await apiInviteUser(name, email, role);
+
+        if (createdEmail) createdEmail.textContent = data.email;
+        if (createdPassword) createdPassword.textContent = data.temporary_password;
+        if (successBanner) successBanner.style.display = 'block';
+
+        (document.getElementById('name') as HTMLInputElement).value = '';
+        (document.getElementById('email') as HTMLInputElement).value = '';
+      } catch (err: any) {
+        if (errorBanner) {
+          errorBanner.textContent = err.message;
+          errorBanner.style.display = 'block';
+        }
+      } finally {
+        submitBtn.innerText = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+  }
+</script>
