@@ -7,9 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.routes.auth import require_admin
 from app.db.database import get_db
 from app.db.models import ContainerReading as ContainerReadingModel
-from app.db.models import Sensor
+from app.db.models import Sensor, User
 from app.core.config import settings
 from app.models.schemas import (
     ContainerReading,
@@ -161,7 +162,10 @@ async def get_sensor(sensor_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/registry/{sensor_id}", response_model=SensorInfo)
 async def update_sensor(
-    sensor_id: str, updates: SensorUpdate, db: AsyncSession = Depends(get_db)
+    sensor_id: str,
+    updates: SensorUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ):
     """Actualizar campos de un sensor (zona, coordenadas, status)."""
     result = await db.execute(select(Sensor).where(Sensor.sensor_id == sensor_id))
@@ -176,7 +180,11 @@ async def update_sensor(
 
 
 @router.delete("/registry/{sensor_id}")
-async def delete_sensor(sensor_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_sensor(
+    sensor_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
     """Soft delete: desactiva el sensor sin borrar su historial."""
     result = await db.execute(select(Sensor).where(Sensor.sensor_id == sensor_id))
     row = result.scalar_one_or_none()

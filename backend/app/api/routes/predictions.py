@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.routes.auth import require_admin
+from app.db.models import User
 from app.models.schemas import ContainerPrediction, ModelStatus, PredictionResponse
 from app.services.prediction import (
     MIN_TRAINING_SAMPLES,
@@ -44,7 +46,7 @@ async def get_model_status():
 
 
 @router.post("/retrain")
-async def force_retrain():
+async def force_retrain(_admin: User = Depends(require_admin)):
     """Manually trigger model retraining."""
     X, y = _build_training_set(container_history)
     if len(X) < MIN_TRAINING_SAMPLES:

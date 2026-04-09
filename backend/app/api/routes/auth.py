@@ -104,6 +104,15 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
         )
     return user
 
+
+async def require_collector_or_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role not in ("collector", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de recolector o administrador",
+        )
+    return user
+
 # ---------------------------------------------------------------------------
 # Seed default admin
 # ---------------------------------------------------------------------------

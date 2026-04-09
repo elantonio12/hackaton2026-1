@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.routes.auth import require_admin
 from app.db.database import get_db
-from app.db.models import Collector
+from app.db.models import Collector, User
 from app.models.schemas import CollectorCreate, CollectorUpdate
 from app.models.schemas import Collector as CollectorSchema
 
@@ -13,7 +14,11 @@ router = APIRouter()
 
 
 @router.post("/", response_model=CollectorSchema)
-async def create_collector(collector: CollectorCreate, db: AsyncSession = Depends(get_db)):
+async def create_collector(
+    collector: CollectorCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
     now = datetime.now(timezone.utc)
     row = Collector(**collector.model_dump(), created_at=now, updated_at=now)
     db.add(row)
@@ -46,7 +51,10 @@ async def get_collector(collector_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{collector_id}", response_model=CollectorSchema)
 async def update_collector(
-    collector_id: int, updates: CollectorUpdate, db: AsyncSession = Depends(get_db)
+    collector_id: int,
+    updates: CollectorUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ):
     result = await db.execute(select(Collector).where(Collector.id == collector_id))
     row = result.scalar_one_or_none()
@@ -61,7 +69,11 @@ async def update_collector(
 
 
 @router.delete("/{collector_id}")
-async def delete_collector(collector_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_collector(
+    collector_id: int,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
     result = await db.execute(select(Collector).where(Collector.id == collector_id))
     row = result.scalar_one_or_none()
     if not row:
