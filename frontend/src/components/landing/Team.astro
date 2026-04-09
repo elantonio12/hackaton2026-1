@@ -3,36 +3,26 @@ const members = [
   { name: 'Daniel Capistran Morales', initials: 'DC', role: 'Backend / Cloud', desc: 'Arquitectura, integracion Watsonx, API' },
   { name: 'Pamela Mota Orozco', initials: 'PM', role: 'Frontend / UX', desc: 'Dashboard operativo, prototipo de app' },
   { name: 'Diana Valeria Legorreta', initials: 'DV', role: 'Datos / IA', desc: 'Simulador IoT, modelos de prediccion' },
-  { name: 'Luis Antonio Sandoval Vargas', initials: 'LS', role: 'QA / Integracion', desc: 'Pruebas, documentacion tecnica' },
-  { name: 'Karla Paola Alcerreca Saldivar', initials: 'KA', role: 'Pitch', desc: 'Narrativa del proyecto, presentacion' },
+  { name: 'Luis Antonio Sandoval V.', initials: 'LS', role: 'QA / Integracion', desc: 'Pruebas, documentacion tecnica' },
+  { name: 'Karla Paola Alcerreca S.', initials: 'KA', role: 'Pitch', desc: 'Narrativa del proyecto, presentacion' },
 ];
-
-const colors = ['bg-eco-green', 'bg-eco-info', 'bg-eco-green-dark', 'bg-eco-green-light', 'bg-eco-green'];
+const colors = ['bg-eco-green', 'bg-blue-600', 'bg-eco-green-dark', 'bg-emerald-600', 'bg-teal-600'];
 ---
-
-<section id="equipo" class="py-20 bg-green-50/30">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
-    <div class="text-center max-w-3xl mx-auto mb-14 fade-up">
-      <h2 class="text-3xl sm:text-4xl font-bold text-eco-text-primary mb-4">
-        El equipo detras de EcoRuta
-      </h2>
-      <p class="text-lg text-eco-text-secondary">
-        Syle Studio — 5 perfiles complementarios unidos por la mision de hacer ciudades mas inteligentes.
-      </p>
-    </div>
-
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 max-w-5xl mx-auto">
-      {members.map((m, i) => (
-        <div class="bg-white border border-eco-border rounded-xl p-5 text-center fade-up hover:shadow-md transition-shadow" style={`animation-delay:${i * 0.08}s`}>
-          <div class={`w-14 h-14 ${colors[i]} text-white rounded-full flex items-center justify-center font-bold text-lg mx-auto mb-3`}>
-            {m.initials}
-          </div>
-          <h3 class="font-semibold text-eco-text-primary text-sm mb-1">{m.name}</h3>
-          <span class="inline-block text-xs bg-green-50 text-eco-green px-2 py-0.5 rounded-full font-medium mb-2">{m.role}</span>
-          <p class="text-xs text-eco-text-secondary">{m.desc}</p>
-        </div>
-      ))}
-    </div>
+<section id="equipo" class="mx-auto mt-32 max-w-7xl px-6 sm:mt-56 lg:px-8">
+  <div class="mx-auto max-w-2xl lg:mx-0">
+    <h2 class="text-base/7 font-semibold text-eco-green">El equipo</h2>
+    <p class="mt-2 text-4xl font-semibold tracking-tight text-pretty text-gray-900 sm:text-5xl">Syle Studio</p>
+    <p class="mt-6 text-lg/8 text-gray-600">5 perfiles complementarios unidos por la mision de hacer ciudades mas inteligentes.</p>
   </div>
+
+  <ul role="list" class="mx-auto mt-16 grid max-w-2xl grid-cols-2 gap-x-8 gap-y-14 sm:grid-cols-3 lg:mx-0 lg:max-w-none lg:grid-cols-5">
+    {members.map((m, i) => (
+      <li>
+        <div class={`${colors[i]} size-14 rounded-full flex items-center justify-center text-white font-bold text-lg`}>{m.initials}</div>
+        <h3 class="mt-4 text-base/7 font-semibold tracking-tight text-gray-900">{m.name}</h3>
+        <p class="text-sm/6 text-eco-green font-medium">{m.role}</p>
+        <p class="text-sm/6 text-gray-600 mt-1">{m.desc}</p>
+      </li>
+    ))}
+  </ul>
 </section>

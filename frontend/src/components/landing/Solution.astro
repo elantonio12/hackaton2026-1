@@ -1,60 +1,62 @@
-<!-- Solution section: 4 feature cards -->
-<section id="solucion" class="py-20 bg-green-50/30">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+---
+---
+<section id="solucion" class="mx-auto mt-32 max-w-7xl px-6 sm:mt-56 lg:px-8">
+  <div class="mx-auto max-w-2xl lg:text-center">
+    <h2 class="text-base/7 font-semibold text-eco-green">La solucion</h2>
+    <p class="mt-2 text-4xl font-semibold tracking-tight text-pretty text-gray-900 sm:text-5xl lg:text-balance">Recoleccion inteligente para ciudades que se anticipan</p>
+    <p class="mt-6 text-lg/8 text-gray-600">Un sistema que integra datos en tiempo real, inteligencia artificial y optimizacion matematica para que cada camion vaya solo donde se necesita.</p>
+  </div>
 
-    <div class="text-center max-w-3xl mx-auto mb-14 fade-up">
-      <h2 class="text-3xl sm:text-4xl font-bold text-eco-text-primary mb-4">
-        EcoRuta: recoleccion inteligente para ciudades que se anticipan
-      </h2>
-      <p class="text-lg text-eco-text-secondary">
-        Un sistema que integra datos en tiempo real, inteligencia artificial y optimizacion matematica para que cada camion vaya solo donde se necesita.
-      </p>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-      <!-- IoT Sensors -->
-      <div class="bg-white border border-eco-border rounded-xl p-6 flex flex-col gap-3 fade-up hover:shadow-lg hover:-translate-y-0.5 transition-all">
-        <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z"/>
-          </svg>
-        </div>
-        <h3 class="font-semibold text-eco-text-primary">Monitoreo en tiempo real</h3>
-        <p class="text-sm text-eco-text-secondary">Sensores IoT en cada contenedor transmiten niveles de ocupacion cada 10 segundos. Sabemos exactamente que contenedores necesitan atencion.</p>
+  <div class="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
+    <dl class="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-4">
+      <!-- IoT -->
+      <div class="flex flex-col">
+        <dt class="text-base/7 font-semibold text-gray-900">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-lg bg-eco-green">
+            <svg class="size-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z"/></svg>
+          </div>
+          Monitoreo en tiempo real
+        </dt>
+        <dd class="mt-1 flex flex-auto flex-col text-base/7 text-gray-600">
+          <p class="flex-auto">Sensores IoT en cada contenedor transmiten niveles de ocupacion cada 10 segundos. Sabemos exactamente que contenedores necesitan atencion.</p>
+        </dd>
       </div>
-
-      <!-- AI Prediction -->
-      <div class="bg-white border border-eco-border rounded-xl p-6 flex flex-col gap-3 fade-up hover:shadow-lg hover:-translate-y-0.5 transition-all" style="animation-delay:.1s">
-        <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
-          </svg>
-        </div>
-        <h3 class="font-semibold text-eco-text-primary">Prediccion con IA</h3>
-        <p class="text-sm text-eco-text-secondary">Modelos de machine learning predicen que contenedores estaran llenos en las proximas 24 horas, anticipando problemas antes de que ocurran.</p>
+      <!-- AI -->
+      <div class="flex flex-col">
+        <dt class="text-base/7 font-semibold text-gray-900">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-lg bg-eco-green">
+            <svg class="size-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>
+          </div>
+          Prediccion con IA
+        </dt>
+        <dd class="mt-1 flex flex-auto flex-col text-base/7 text-gray-600">
+          <p class="flex-auto">Modelos de machine learning predicen que contenedores estaran llenos en las proximas 24 horas, anticipando problemas antes de que ocurran.</p>
+        </dd>
       </div>
-
-      <!-- Optimized Routes -->
-      <div class="bg-white border border-eco-border rounded-xl p-6 flex flex-col gap-3 fade-up hover:shadow-lg hover:-translate-y-0.5 transition-all" style="animation-delay:.2s">
-        <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z"/>
-          </svg>
-        </div>
-        <h3 class="font-semibold text-eco-text-primary">Rutas optimizadas</h3>
-        <p class="text-sm text-eco-text-secondary">Algoritmos de optimizacion combinatoria (TSP + OR-Tools) generan la ruta mas eficiente en menos de 5 segundos, priorizando contenedores criticos.</p>
+      <!-- Routes -->
+      <div class="flex flex-col">
+        <dt class="text-base/7 font-semibold text-gray-900">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-lg bg-eco-green">
+            <svg class="size-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z"/></svg>
+          </div>
+          Rutas optimizadas
+        </dt>
+        <dd class="mt-1 flex flex-auto flex-col text-base/7 text-gray-600">
+          <p class="flex-auto">Algoritmos de optimizacion combinatoria (TSP + OR-Tools) generan la ruta mas eficiente en menos de 5 segundos, priorizando contenedores criticos.</p>
+        </dd>
       </div>
-
-      <!-- Natural Language -->
-      <div class="bg-white border border-eco-border rounded-xl p-6 flex flex-col gap-3 fade-up hover:shadow-lg hover:-translate-y-0.5 transition-all" style="animation-delay:.3s">
-        <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
-          </svg>
-        </div>
-        <h3 class="font-semibold text-eco-text-primary">Instrucciones en lenguaje natural</h3>
-        <p class="text-sm text-eco-text-secondary">IBM Watsonx convierte datos tecnicos en instrucciones claras para conductores, reportes para gestores y alertas para ciudadanos. Sin formacion tecnica requerida.</p>
+      <!-- NLP -->
+      <div class="flex flex-col">
+        <dt class="text-base/7 font-semibold text-gray-900">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-lg bg-eco-green">
+            <svg class="size-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
+          </div>
+          Lenguaje natural
+        </dt>
+        <dd class="mt-1 flex flex-auto flex-col text-base/7 text-gray-600">
+          <p class="flex-auto">IBM Watsonx convierte datos tecnicos en instrucciones claras para conductores, reportes para gestores y alertas para ciudadanos.</p>
+        </dd>
       </div>
-    </div>
+    </dl>
   </div>
 </section>

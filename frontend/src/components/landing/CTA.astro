@@ -1,27 +1,30 @@
-<!-- Final CTA with green gradient -->
-<section id="cta" class="py-20 bg-gradient-to-br from-eco-green to-eco-green-dark relative overflow-hidden">
-  <!-- Decorative circles -->
-  <div class="absolute top-10 left-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
-  <div class="absolute bottom-10 right-10 w-60 h-60 bg-white/5 rounded-full blur-3xl"></div>
+---
+---
+<div class="relative isolate mt-32 px-6 py-32 sm:mt-56 sm:py-40 lg:px-8">
+  <!-- SVG grid pattern -->
+  <svg aria-hidden="true" class="absolute inset-0 -z-10 size-full [mask-image:radial-gradient(100%_100%_at_top_right,white,transparent)] stroke-gray-200">
+    <defs>
+      <pattern id="cta-grid" width="200" height="200" x="50%" y="0" patternUnits="userSpaceOnUse">
+        <path d="M.5 200V.5H200" fill="none" />
+      </pattern>
+    </defs>
+    <svg x="50%" y="0" class="overflow-visible fill-gray-50">
+      <path d="M-200 0h201v201h-201Z M600 0h201v201h-201Z M-400 600h201v201h-201Z M200 800h201v201h-201Z" stroke-width="0" />
+    </svg>
+    <rect width="100%" height="100%" fill="url(#cta-grid)" stroke-width="0" />
+  </svg>
 
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-    <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4 leading-snug fade-up">
-      Convertir la recoleccion de basura de un servicio reactivo y costoso en un sistema inteligente, predictivo y medible.
-    </h2>
-    <p class="text-lg text-white/70 mb-8 fade-up" style="animation-delay:.1s">
-      EcoRuta es la primera solucion pensada desde Mexico, para Mexico, con tecnologia IBM de clase mundial.
-    </p>
+  <!-- Gradient blob -->
+  <div aria-hidden="true" class="absolute inset-x-0 top-10 -z-10 flex transform-gpu justify-center overflow-hidden blur-3xl">
+    <div style="clip-path: polygon(73.6% 51.7%, 91.7% 11.8%, 100% 46.4%, 97.4% 82.2%, 92.5% 84.9%, 75.7% 64%, 55.3% 47.5%, 46.5% 49.4%, 45% 62.9%, 50.3% 87.2%, 21.3% 64.1%, 0.1% 100%, 5.4% 51.1%, 21.4% 63.9%, 58.9% 0.2%, 73.6% 51.7%)" class="aspect-[1108/632] w-[69.25rem] flex-none bg-gradient-to-r from-[#86efac] to-[#16a34a] opacity-20"></div>
+  </div>
 
-    <a href="/admin/dashboard" class="inline-flex items-center gap-2 bg-white text-eco-green font-semibold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 fade-up" style="animation-delay:.2s">
-      Ver demo en vivo
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-    </a>
-
-    <!-- Bottom stats -->
-    <div class="flex flex-wrap justify-center gap-6 sm:gap-10 mt-12 text-white/80 text-sm fade-up" style="animation-delay:.3s">
-      <span>12,700 ton/dia de basura en CDMX</span>
-      <span>$500 MDP invertidos en infraestructura</span>
-      <span>0 sistemas inteligentes desplegados — hasta ahora</span>
+  <div class="mx-auto max-w-2xl text-center">
+    <h2 class="text-4xl font-semibold tracking-tight text-balance text-gray-900 sm:text-5xl">Convertir la recoleccion de basura en un sistema inteligente, predictivo y medible</h2>
+    <p class="mx-auto mt-6 max-w-xl text-lg/8 text-pretty text-gray-600">EcoRuta es la primera solucion pensada desde Mexico, para Mexico, con tecnologia IBM de clase mundial.</p>
+    <div class="mt-10 flex items-center justify-center gap-x-6">
+      <a href="/admin/dashboard" class="rounded-md bg-eco-green px-3.5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-eco-green-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-eco-green">Ver demo en vivo</a>
+      <a href="#problema" class="text-sm/6 font-semibold text-gray-900">Conocer mas <span aria-hidden="true">&rarr;</span></a>
     </div>
   </div>
-</section>
+</div>

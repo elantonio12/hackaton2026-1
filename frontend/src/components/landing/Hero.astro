@@ -1,100 +1,79 @@
-<!-- Hero section with headline + dashboard mockup -->
-<section id="hero" class="min-h-screen pt-16 flex items-center bg-gradient-to-br from-white via-white to-green-50 relative overflow-hidden">
-  <!-- Decorative bg circles -->
-  <div class="absolute top-20 right-0 w-96 h-96 bg-eco-green/5 rounded-full blur-3xl -z-0"></div>
-  <div class="absolute bottom-0 left-0 w-72 h-72 bg-eco-green/8 rounded-full blur-2xl -z-0"></div>
+---
+---
+<div class="relative isolate overflow-hidden bg-white pt-14">
+  <!-- Top gradient blob -->
+  <div aria-hidden="true" class="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
+    <div style="clip-path: polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)" class="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#86efac] to-[#16a34a] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"></div>
+  </div>
 
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center relative z-10">
-    <!-- Text column -->
-    <div class="flex flex-col gap-6 fade-up">
-      <span class="inline-flex items-center gap-2 text-xs font-medium text-eco-green bg-green-50 border border-green-200 rounded-full px-3 py-1.5 w-fit">
-        Track IBM — Ciudades Resilientes | Hackathon Genius Arena 2026
-      </span>
+  <div class="py-24 sm:py-32 lg:pb-40">
+    <div class="mx-auto max-w-7xl px-6 lg:px-8">
+      <div class="mx-auto max-w-2xl text-center">
+        <!-- Badge -->
+        <div class="mb-8 flex justify-center">
+          <div class="relative rounded-full px-3 py-1 text-sm/6 text-gray-600 ring-1 ring-gray-900/10 hover:ring-gray-900/20">
+            Track IBM — Ciudades Resilientes | Hackathon Genius Arena 2026
+          </div>
+        </div>
 
-      <h1 class="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold leading-[1.1] text-eco-text-primary">
-        La Ciudad de Mexico genera
-        <span class="text-eco-green">12,700 toneladas</span>
-        de basura al dia.
-      </h1>
-      <p class="text-2xl sm:text-3xl font-semibold text-eco-text-secondary leading-snug">
-        El sistema para recogerla no ha cambiado en decadas.
-      </p>
+        <h1 class="text-5xl font-semibold tracking-tight text-balance text-gray-900 sm:text-7xl">
+          La Ciudad de Mexico genera <span class="text-eco-green">12,700 toneladas</span> de basura al dia
+        </h1>
+        <p class="mt-8 text-lg font-medium text-pretty text-gray-500 sm:text-xl/8">
+          EcoRuta usa sensores IoT, inteligencia artificial y optimizacion de rutas en tiempo real para transformar la recoleccion de residuos: menos kilometros, menos emisiones, mejor servicio.
+        </p>
 
-      <p class="text-lg text-eco-text-secondary max-w-xl">
-        EcoRuta usa sensores IoT, inteligencia artificial y optimizacion de rutas en tiempo real para transformar la recoleccion de residuos: menos kilometros, menos emisiones, mejor servicio.
-      </p>
-
-      <div class="flex flex-wrap gap-3">
-        <a href="/admin/dashboard" class="inline-flex items-center gap-2 bg-gradient-to-r from-eco-green to-eco-green-dark text-white font-semibold px-6 py-3 rounded-xl shadow-lg shadow-eco-green/25 hover:shadow-xl hover:shadow-eco-green/30 transition-all hover:-translate-y-0.5">
-          Ver demo en vivo
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-        </a>
-        <a href="#solucion" class="inline-flex items-center gap-2 border-2 border-eco-green text-eco-green font-semibold px-6 py-3 rounded-xl hover:bg-green-50 transition-colors">
-          Conocer la solucion
-        </a>
+        <div class="mt-10 flex items-center justify-center gap-x-6">
+          <a href="/admin/dashboard" class="rounded-md bg-eco-green px-3.5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-eco-green-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-eco-green">Ver demo en vivo</a>
+          <a href="#solucion" class="text-sm/6 font-semibold text-gray-900">Conocer la solucion <span aria-hidden="true">&rarr;</span></a>
+        </div>
       </div>
 
-      <div class="flex flex-wrap gap-4 sm:gap-6 text-sm text-eco-text-secondary mt-2">
-        <span class="flex items-center gap-1.5">
-          <svg class="w-4 h-4 text-eco-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-          25% menos km recorridos
-        </span>
-        <span class="flex items-center gap-1.5">
-          <svg class="w-4 h-4 text-eco-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-          129 kg CO2 evitados/dia
-        </span>
-        <span class="flex items-center gap-1.5">
-          <svg class="w-4 h-4 text-eco-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-          &lt; 5s para generar ruta
-        </span>
-      </div>
-    </div>
-
-    <!-- Dashboard mockup -->
-    <div class="relative hidden lg:block fade-up" style="animation-delay:.2s">
-      <div class="relative bg-eco-bg-panel rounded-2xl shadow-2xl border border-eco-border p-4 transform rotate-1 hover:rotate-0 transition-transform duration-500">
-        <div class="bg-eco-bg rounded-xl p-5 flex flex-col gap-4">
-          <!-- Window bar -->
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-eco-danger"></span>
-            <span class="w-3 h-3 rounded-full bg-eco-warning"></span>
-            <span class="w-3 h-3 rounded-full bg-eco-green"></span>
-            <span class="ml-2 text-xs text-eco-text-secondary">EcoRuta Dashboard — CDMX</span>
-          </div>
-          <!-- Mini metrics -->
-          <div class="grid grid-cols-4 gap-2">
-            <div class="bg-white rounded-lg p-3 text-center">
-              <span class="block text-xl font-bold text-eco-text-primary">50</span>
-              <span class="text-[10px] text-eco-text-secondary">Contenedores</span>
+      <!-- Dashboard screenshot mockup -->
+      <div class="mt-16 flow-root sm:mt-24">
+        <div class="-m-2 rounded-xl bg-gray-900/5 p-2 ring-1 ring-gray-900/10 ring-inset lg:-m-4 lg:rounded-2xl lg:p-4">
+          <!-- Mockup dashboard -->
+          <div class="rounded-md bg-white shadow-xl ring-1 ring-gray-900/10 overflow-hidden">
+            <div class="bg-eco-bg p-4 sm:p-6">
+              <!-- Header bar -->
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <svg class="size-5 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                  <span class="text-sm font-medium text-gray-900">EcoRuta Dashboard</span>
+                  <span class="text-xs text-gray-500 hidden sm:inline">— Panel de administracion</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="size-2 rounded-full bg-eco-green animate-pulse"></span>
+                  <span class="text-xs text-gray-500">En vivo</span>
+                </div>
+              </div>
+              <!-- Metric cards -->
+              <div class="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
+                <div class="bg-white rounded-lg p-2 sm:p-3 border border-gray-200"><span class="block text-lg sm:text-2xl font-semibold text-gray-900">50</span><span class="text-[10px] sm:text-xs text-gray-500">Contenedores</span></div>
+                <div class="bg-white rounded-lg p-2 sm:p-3 border border-gray-200"><span class="block text-lg sm:text-2xl font-semibold text-red-500">8</span><span class="text-[10px] sm:text-xs text-gray-500">Criticos</span></div>
+                <div class="bg-white rounded-lg p-2 sm:p-3 border border-gray-200"><span class="block text-lg sm:text-2xl font-semibold text-amber-500">12</span><span class="text-[10px] sm:text-xs text-gray-500">Llenos 24h</span></div>
+                <div class="bg-white rounded-lg p-2 sm:p-3 border border-gray-200"><span class="block text-lg sm:text-2xl font-semibold text-eco-green">6</span><span class="text-[10px] sm:text-xs text-gray-500">Recolectores</span></div>
+              </div>
+              <!-- Fake map -->
+              <div class="bg-green-50 rounded-lg h-32 sm:h-48 flex items-center justify-center relative overflow-hidden">
+                <svg class="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 400 200" fill="none">
+                  <circle cx="80" cy="60" r="5" fill="#16a34a"/><circle cx="150" cy="40" r="5" fill="#ef4444"/>
+                  <circle cx="220" cy="90" r="5" fill="#f59e0b"/><circle cx="130" cy="130" r="5" fill="#16a34a"/>
+                  <circle cx="290" cy="110" r="5" fill="#ef4444"/><circle cx="60" cy="120" r="5" fill="#16a34a"/>
+                  <circle cx="340" cy="55" r="5" fill="#f59e0b"/><circle cx="190" cy="155" r="5" fill="#16a34a"/>
+                  <circle cx="310" cy="150" r="5" fill="#16a34a"/><circle cx="250" cy="45" r="5" fill="#ef4444"/>
+                </svg>
+                <span class="text-sm text-eco-green-dark font-medium z-10 bg-white/60 px-3 py-1 rounded-full">Mapa CDMX — 3 zonas monitoreadas</span>
+              </div>
             </div>
-            <div class="bg-white rounded-lg p-3 text-center">
-              <span class="block text-xl font-bold text-eco-danger">8</span>
-              <span class="text-[10px] text-eco-text-secondary">Criticos</span>
-            </div>
-            <div class="bg-white rounded-lg p-3 text-center">
-              <span class="block text-xl font-bold text-eco-warning">12</span>
-              <span class="text-[10px] text-eco-text-secondary">Llenos 24h</span>
-            </div>
-            <div class="bg-white rounded-lg p-3 text-center">
-              <span class="block text-xl font-bold text-eco-green">6</span>
-              <span class="text-[10px] text-eco-text-secondary">Recolectores</span>
-            </div>
-          </div>
-          <!-- Fake map -->
-          <div class="bg-green-50 rounded-lg h-48 flex items-center justify-center relative overflow-hidden">
-            <svg class="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 200 120">
-              <circle cx="60" cy="45" r="4" fill="#16a34a"/><circle cx="90" cy="30" r="4" fill="#ef4444"/>
-              <circle cx="120" cy="60" r="4" fill="#f59e0b"/><circle cx="75" cy="80" r="4" fill="#16a34a"/>
-              <circle cx="140" cy="75" r="4" fill="#ef4444"/><circle cx="50" cy="70" r="4" fill="#16a34a"/>
-              <circle cx="160" cy="40" r="4" fill="#f59e0b"/><circle cx="100" cy="90" r="4" fill="#16a34a"/>
-            </svg>
-            <span class="text-sm text-eco-green font-medium z-10">Mapa CDMX — 3 zonas</span>
           </div>
         </div>
       </div>
-      <!-- Glow -->
-      <div class="absolute -top-8 -right-8 w-32 h-32 bg-eco-green/10 rounded-full blur-2xl"></div>
-      <div class="absolute -bottom-6 -left-6 w-24 h-24 bg-eco-green/15 rounded-full blur-xl"></div>
     </div>
   </div>
-</section>
+
+  <!-- Bottom gradient blob -->
+  <div aria-hidden="true" class="absolute inset-x-0 top-[calc(100%-13rem)] -z-10 transform-gpu overflow-hidden blur-3xl sm:top-[calc(100%-30rem)]">
+    <div style="clip-path: polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)" class="relative left-[calc(50%+3rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 bg-gradient-to-tr from-[#86efac] to-[#16a34a] opacity-20 sm:left-[calc(50%+36rem)] sm:w-[72.1875rem]"></div>
+  </div>
+</div>

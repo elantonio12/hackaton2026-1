@@ -26,46 +26,20 @@ import Footer from '../components/landing/Footer.astro';
     <title>EcoRuta — Recoleccion Inteligente de Residuos para CDMX</title>
   </head>
 
-  <body class="bg-white text-eco-text-primary font-sans antialiased overflow-x-hidden">
+  <body class="bg-white text-gray-900 font-sans antialiased">
     <Nav />
-    <Hero />
-    <Problem />
-    <Solution />
-    <Metrics />
-    <HowItWorks />
-    <Architecture />
-    <Market />
-    <ODS />
-    <Team />
-    <CTA />
+    <main class="isolate">
+      <Hero />
+      <Problem />
+      <Solution />
+      <Metrics />
+      <HowItWorks />
+      <Architecture />
+      <Market />
+      <ODS />
+      <Team />
+      <CTA />
+    </main>
     <Footer />
   </body>
 </html>
-
-<!-- Fade-up animation on scroll -->
-<style>
-  .fade-up {
-    opacity: 0;
-    transform: translateY(24px);
-    transition: opacity 0.6s ease, transform 0.6s ease;
-  }
-  .fade-up.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-</style>
-
-<script>
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) {
-          e.target.classList.add('visible');
-          observer.unobserve(e.target);
-        }
-      });
-    },
-    { threshold: 0.15 }
-  );
-  document.querySelectorAll('.fade-up').forEach((el) => observer.observe(el));
-</script>
