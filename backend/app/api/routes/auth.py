@@ -109,7 +109,7 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 # ---------------------------------------------------------------------------
 
 def seed_admin():
-    email = "admin@ecoruta.local"
+    email = "admin@ecoruta.app"
     sub = f"local|{email}"
     if sub in users_db:
         return
