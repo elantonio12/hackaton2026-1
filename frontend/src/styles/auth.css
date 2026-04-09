@@ -1,7 +1,15 @@
 /* src/styles/auth.css */
 
+/* Override layout constraints — auth pages need to scroll */
+body:has(.auth-main) {
+    overflow: auto;
+    height: auto;
+    min-height: 100dvh;
+}
+
 .auth-main {
     min-height: 100vh;
+    min-height: 100dvh;
     background-color: var(--color-eco-bg, #f9fafb);
     display: flex;
     align-items: center;
@@ -19,7 +27,7 @@
     padding: 2rem;
     transition: all 0.3s ease;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     box-sizing: border-box;
 }
 
