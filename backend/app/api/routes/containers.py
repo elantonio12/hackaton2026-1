@@ -12,6 +12,8 @@ container_readings: dict[str, ContainerReading] = {}
 async def receive_reading(reading: ContainerReading):
     """Receive a sensor reading from a container (IoT simulator sends data here)."""
     container_readings[reading.container_id] = reading
+    from app.services.prediction import append_reading
+    append_reading(reading)
     return {"status": "received", "container_id": reading.container_id}
 
 

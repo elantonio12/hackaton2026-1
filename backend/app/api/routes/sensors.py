@@ -109,6 +109,10 @@ async def receive_sensor_reading(
 
     container_readings[reading.container_id] = reading
 
+    from app.services.prediction import append_reading, maybe_retrain
+    append_reading(reading)
+    maybe_retrain()
+
     return {
         "status": "received",
         "container_id": reading.container_id,

@@ -80,3 +80,30 @@ class CitizenReport(BaseModel):
     longitude: float
     description: str
     zone: str
+
+
+class ContainerPrediction(BaseModel):
+    container_id: str
+    zone: str
+    current_fill_level: float
+    predicted_fill_24h: float
+    estimated_hours_to_full: float | None = None
+    estimated_full_at: str | None = None
+    fill_rate_per_hour: float
+    confidence: str
+
+
+class PredictionResponse(BaseModel):
+    predictions: list[ContainerPrediction]
+    model_trained: bool
+    model_loss: float | None = None
+    generated_at: str
+
+
+class ModelStatus(BaseModel):
+    is_trained: bool
+    training_samples: int
+    last_trained_at: str | None = None
+    loss: float | None = None
+    readings_since_last_train: int
+    next_retrain_in: int
