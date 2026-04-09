@@ -76,11 +76,34 @@ import { adminNav } from '../../lib/nav';
             </div>
           </div>
         </div>
+
+        <!-- Fleet status row: 4 mini-counters wired to /trucks/ -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div class="bg-eco-bg-header rounded-lg px-3 py-2 flex items-center justify-between">
+            <span class="text-eco-text-secondary">En ruta</span>
+            <span id="fleet-en-route" class="text-eco-info font-semibold">—</span>
+          </div>
+          <div class="bg-eco-bg-header rounded-lg px-3 py-2 flex items-center justify-between">
+            <span class="text-eco-text-secondary">Recolectando</span>
+            <span id="fleet-collecting" class="text-eco-warning font-semibold">—</span>
+          </div>
+          <div class="bg-eco-bg-header rounded-lg px-3 py-2 flex items-center justify-between">
+            <span class="text-eco-text-secondary">Regresando</span>
+            <span id="fleet-returning" class="text-eco-text-secondary font-semibold">—</span>
+          </div>
+          <div class="bg-eco-bg-header rounded-lg px-3 py-2 flex items-center justify-between">
+            <span class="text-eco-text-secondary">En depósito</span>
+            <span id="fleet-idle" class="text-eco-text-secondary font-semibold">—</span>
+          </div>
+        </div>
+
         <MapView id="map" height="h-[560px]" />
         <div class="flex flex-wrap gap-4 text-xs text-eco-text-secondary">
           <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-danger inline-block"></span>Critico +80%</span>
           <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-warning inline-block"></span>Medio 50–80%</span>
           <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-green inline-block"></span>Normal &lt;50%</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm bg-eco-info"></span>Camión en ruta</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm bg-eco-warning"></span>Recolectando</span>
         </div>
       </section>
 
@@ -199,6 +222,101 @@ loadMap();
 // 30s refresh: fill levels don't change fast enough to justify 10s polls
 // at 10K scale — full payload is ~1.5MB per request.
 setInterval(loadMap, 30_000);
+
+// ── Fleet layer ───────────────────────────────────────────────────
+// Live truck markers on top of the container layer. Polled every 5s
+// (matching the simulator tick) so the dashboard sees movement in
+// near-real time. Markers are keyed by truck.id and updated in place
+// — never recreated — so popups stay open and there's zero DOM churn.
+
+// Tailwind colors per truck status (kept inline so this script doesn't
+// need to import the design tokens).
+const TRUCK_COLORS: Record<string, string> = {
+  en_route:   '#3b82f6',  // info / blue
+  collecting: '#f59e0b',  // warning / amber
+  returning:  '#64748b',  // muted / slate
+  idle:       '#16a34a',  // green / green
+  offline:    '#94a3b8',  // gray
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  en_route:   'En ruta',
+  collecting: 'Recolectando',
+  returning:  'Regresando',
+  idle:       'En depósito',
+  offline:    'Desconectado',
+};
+
+function truckIcon(status: string): any {
+  const color = TRUCK_COLORS[status] ?? '#16a34a';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:22px;height:22px;border-radius:6px;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif">T</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+function truckPopup(t: any): string {
+  const status = STATUS_LABELS[t.status] ?? t.status;
+  const loadPct = Math.round((t.current_load_m3 / t.capacity_m3) * 100);
+  const zone = (t.zone || '').replace(/_/g, ' ');
+  return `
+    <div style="min-width:180px;font-family:ui-sans-serif,system-ui,sans-serif">
+      <div style="font-weight:600;margin-bottom:2px">${t.name}</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:6px">${t.id} · ${zone}</div>
+      <div style="font-size:12px"><b>Estado:</b> ${status}</div>
+      <div style="font-size:12px"><b>Carga:</b> ${t.current_load_m3.toFixed(1)} / ${t.capacity_m3.toFixed(1)} m³ (${loadPct}%)</div>
+    </div>`;
+}
+
+const truckIndex: Map<string, any> = new Map();
+
+async function loadFleet() {
+  try {
+    // /trucks/ is unauthenticated read-only — no need for __authFetch__
+    const res = await fetch(`${API}/api/v1/trucks/`);
+    if (!res.ok) return;
+    const trucks: any[] = await res.json();
+
+    // Counters
+    const counts = { en_route: 0, collecting: 0, returning: 0, idle: 0 };
+    for (const t of trucks) {
+      if (t.status in counts) counts[t.status as keyof typeof counts]++;
+    }
+    setText('fleet-en-route',  counts.en_route);
+    setText('fleet-collecting', counts.collecting);
+    setText('fleet-returning',  counts.returning);
+    setText('fleet-idle',       counts.idle);
+
+    // Markers — in-place updates, added directly to map (NOT clusterGroup)
+    // so they stay above the clustered container points and don't get
+    // collapsed at low zoom levels.
+    const seen = new Set<string>();
+    for (const t of trucks) {
+      seen.add(t.id);
+      const existing = truckIndex.get(t.id);
+      if (existing) {
+        existing.setLatLng([t.current_lat, t.current_lon]);
+        existing.setIcon(truckIcon(t.status));
+        existing.setPopupContent(truckPopup(t));
+      } else {
+        const m = L.marker([t.current_lat, t.current_lon], {
+          icon: truckIcon(t.status),
+          zIndexOffset: 1000,
+        }).bindPopup(truckPopup(t)).addTo(map);
+        truckIndex.set(t.id, m);
+      }
+    }
+    // Remove any trucks that vanished from the backend
+    for (const [id, m] of truckIndex.entries()) {
+      if (!seen.has(id)) { m.remove(); truckIndex.delete(id); }
+    }
+  } catch {}
+}
+
+loadFleet();
+setInterval(loadFleet, 5_000);
 
 // ── Metricas ──────────────────────────────────────────────────────
 async function loadMetrics() {

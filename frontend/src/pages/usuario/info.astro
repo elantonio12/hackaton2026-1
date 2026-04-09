@@ -42,6 +42,34 @@ import { citizenNav } from '../../lib/nav';
         </button>
       </div>
 
+      <!-- Next collection truck -->
+      <div id="truck-card" class="hidden bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Recolección en tu zona</span>
+          <span id="truck-status-badge" class="text-xs px-2 py-0.5 rounded-full bg-eco-bg-header text-eco-text-secondary">—</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-eco-info/10 flex items-center justify-center shrink-0">
+            <span class="text-eco-info font-bold text-sm">T</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p id="truck-name" class="text-sm font-medium text-eco-text-primary truncate">—</p>
+            <p id="truck-eta" class="text-xs text-eco-text-secondary">Calculando ETA…</p>
+          </div>
+        </div>
+      </div>
+      <div id="truck-empty" class="hidden bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-eco-bg-header flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-eco-text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm text-eco-text-primary">Sin recolección activa</p>
+          <p class="text-xs text-eco-text-secondary">No hay camiones operando en tu zona ahora.</p>
+        </div>
+      </div>
+
       <!-- Zone stats -->
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
@@ -405,6 +433,94 @@ import { citizenNav } from '../../lib/nav';
     }
   }
 
+  // ── Next-truck-in-zone card ──────────────────────────────────────
+  // Pulls /trucks/?zone={currentZone}, picks the most relevant one
+  // (active first, then closest to the user), and shows ETA estimated
+  // from haversine distance / 25 km/h average urban speed.
+  //
+  // 25 km/h is intentionally conservative — the simulator runs at x8
+  // demo speed but real garbage trucks crawl with frequent stops, so
+  // anything faster would be misleading to citizens.
+  const TRUCK_AVG_SPEED_KMH = 25;
+  const STATUS_LABELS_TRUCK: Record<string, string> = {
+    en_route:   'En ruta',
+    collecting: 'Recolectando',
+    returning:  'Regresando a depósito',
+    idle:       'En depósito',
+    offline:    'Desconectado',
+  };
+  const STATUS_BADGE_CLASS: Record<string, string> = {
+    en_route:   'bg-eco-info/15 text-eco-info',
+    collecting: 'bg-eco-warning/15 text-eco-warning',
+    returning:  'bg-eco-bg-header text-eco-text-secondary',
+    idle:       'bg-eco-bg-header text-eco-text-secondary',
+    offline:    'bg-eco-bg-header text-eco-text-secondary',
+  };
+
+  function pickRelevantTruck(trucks: any[], userLat: number, userLon: number): any | null {
+    // Active trucks first (en_route or collecting); among those the closest wins.
+    // Falls back to nearest idle/returning if there are no active ones.
+    if (trucks.length === 0) return null;
+    const active = trucks.filter(t => t.status === 'en_route' || t.status === 'collecting');
+    const pool = active.length > 0 ? active : trucks;
+    let best: any = null;
+    let bestDist = Infinity;
+    for (const t of pool) {
+      const d = haversineKm(userLat, userLon, t.current_lat, t.current_lon);
+      if (d < bestDist) { bestDist = d; best = t; }
+    }
+    return best ? { truck: best, distanceKm: bestDist } : null;
+  }
+
+  async function loadZoneTruck() {
+    if (!currentZone) return;
+    const loc = JSON.parse(sessionStorage.getItem('ecoruta:user-location') || 'null');
+    if (!loc) return;
+
+    const card = document.getElementById('truck-card')!;
+    const empty = document.getElementById('truck-empty')!;
+
+    try {
+      const res = await fetch(`${API}/api/v1/trucks/?zone=${encodeURIComponent(currentZone)}`);
+      if (!res.ok) throw new Error('fetch failed');
+      const trucks: any[] = await res.json();
+
+      const pick = pickRelevantTruck(trucks, loc.latitude, loc.longitude);
+      if (!pick) {
+        card.classList.add('hidden');
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      const { truck, distanceKm } = pick;
+      empty.classList.add('hidden');
+      card.classList.remove('hidden');
+
+      const etaMin = Math.max(1, Math.round((distanceKm / TRUCK_AVG_SPEED_KMH) * 60));
+      const status = truck.status as string;
+      const statusLabel = STATUS_LABELS_TRUCK[status] ?? status;
+      const badgeClass = STATUS_BADGE_CLASS[status] ?? 'bg-eco-bg-header text-eco-text-secondary';
+
+      const badge = document.getElementById('truck-status-badge')!;
+      badge.textContent = statusLabel;
+      badge.className = `text-xs px-2 py-0.5 rounded-full ${badgeClass}`;
+
+      document.getElementById('truck-name')!.textContent = truck.name;
+
+      const etaEl = document.getElementById('truck-eta')!;
+      if (status === 'en_route' || status === 'collecting') {
+        etaEl.textContent = `A ${distanceKm.toFixed(1)} km · ~${etaMin} min de tu ubicación`;
+      } else if (status === 'returning') {
+        etaEl.textContent = `Regresando al depósito · a ${distanceKm.toFixed(1)} km`;
+      } else {
+        etaEl.textContent = `En depósito · disponible cuando arranque ruta`;
+      }
+    } catch {
+      card.classList.add('hidden');
+      empty.classList.remove('hidden');
+    }
+  }
+
   // Bootstrap: resolve the user's location first, then loadContainers()
   // is called from inside the geolocation success handler. Periodic
   // refresh only runs once we have a zone locked.
@@ -412,4 +528,19 @@ import { citizenNav } from '../../lib/nav';
   setInterval(() => {
     if (currentZone) loadContainers();
   }, 30_000);
+
+  // Truck card refreshes faster (10s) so the ETA reflects movement.
+  setInterval(() => {
+    if (currentZone) loadZoneTruck();
+  }, 10_000);
+
+  // Trigger an initial truck load right after location resolves.
+  // We can't tap into resolveLocation() without rewriting it, so poll
+  // until currentZone is set and then fire once.
+  const truckBootstrap = setInterval(() => {
+    if (currentZone) {
+      loadZoneTruck();
+      clearInterval(truckBootstrap);
+    }
+  }, 500);
 </script>

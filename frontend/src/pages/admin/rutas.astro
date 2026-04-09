@@ -1,17 +1,483 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import AppHeader from '../../components/AppHeader.astro';
+import MapView from '../../components/MapView.astro';
 import { adminNav } from '../../lib/nav';
 ---
 
 <Layout title="Rutas" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Rutas" nav={adminNav} />
-    <main class="max-w-6xl mx-auto px-4 py-6">
-      <h1 class="text-2xl font-semibold text-eco-text-primary mb-4">Gestion de rutas</h1>
-      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6">
-        <p class="text-sm text-eco-text-secondary">CRUD y visualizacion de rutas de recoleccion (en construccion).</p>
+
+    <main class="max-w-6xl mx-auto px-4 py-5 flex flex-col gap-4">
+
+      <!-- Header strip: title + zone filter + optimize button -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <h1 class="text-lg font-semibold text-eco-text-primary">Rutas activas</h1>
+          <p class="text-xs text-eco-text-secondary" id="routes-summary">Cargando…</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select
+            id="zone-filter"
+            class="text-xs py-2 px-3 rounded-lg border border-eco-border bg-eco-bg text-eco-text-primary focus:outline-none focus:border-eco-green"
+          >
+            <option value="">Todas las alcaldías</option>
+          </select>
+          <button id="optimize-btn" class="btn btn-primary text-xs px-3 py-2">
+            Optimizar rutas
+          </button>
+        </div>
       </div>
+
+      <!-- Fleet counters -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Camiones activos</span>
+          <span class="text-2xl font-semibold text-eco-info" id="stat-active">—</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Stops pendientes</span>
+          <span class="text-2xl font-semibold text-eco-warning" id="stat-pending">—</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Stops recolectados</span>
+          <span class="text-2xl font-semibold text-eco-green" id="stat-collected">—</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Distancia total</span>
+          <span class="text-2xl font-semibold text-eco-text-primary" id="stat-distance">—</span>
+        </div>
+      </div>
+
+      <!-- Map + side panel -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Map -->
+        <div class="lg:col-span-2 bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-2">
+          <MapView id="rutas-map" height="h-[600px]" cluster={false} />
+        </div>
+
+        <!-- Side panel: list of routes -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-2 max-h-[640px] overflow-y-auto">
+          <h2 class="text-xs font-medium text-eco-text-secondary uppercase tracking-wide px-1">Detalle por camión</h2>
+          <ul id="route-list" class="flex flex-col gap-2">
+            <li class="text-xs text-eco-text-secondary">Cargando rutas…</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Optimize result toast -->
+      <div id="optimize-result" class="hidden text-xs px-3 py-2 rounded-lg"></div>
+
     </main>
   </div>
 </Layout>
+
+<script>
+  /**
+   * /admin/rutas — single page that ties together everything the routing
+   * pipeline produces:
+   *  - GET /trucks/                  → all 30 trucks (status, position)
+   *  - GET /trucks/{id}/route        → polyline + stops for active ones
+   *  - POST /routes/optimize         → re-run CVRP for any idle trucks
+   *
+   * The map shows one polyline per active route, color-coded by truck.id
+   * (deterministic hash → palette index). Clicking a row in the side
+   * panel zooms to that route's bounds.
+   */
+  const w = window as any;
+  const L = w.__L__;
+  const map = w.__maps__?.['rutas-map'];
+  const API = window.__API__;
+
+  // 16 distinct hues so neighbouring polylines are easy to tell apart.
+  // Picked from Tailwind's 500 line — saturated, readable on OSM tiles.
+  const ROUTE_PALETTE = [
+    '#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899',
+    '#06b6d4', '#84cc16', '#f97316', '#a855f7', '#14b8a6', '#eab308',
+    '#6366f1', '#f43f5e', '#22c55e', '#0ea5e9',
+  ];
+
+  function colorForTruck(truckId: string): string {
+    // Tiny deterministic hash → palette slot. Same truck always gets the
+    // same color across reloads.
+    let h = 0;
+    for (let i = 0; i < truckId.length; i++) h = (h * 31 + truckId.charCodeAt(i)) | 0;
+    return ROUTE_PALETTE[Math.abs(h) % ROUTE_PALETTE.length];
+  }
+
+  const STATUS_LABELS: Record<string, string> = {
+    en_route:   'En ruta',
+    collecting: 'Recolectando',
+    returning:  'Regresando',
+    idle:       'En depósito',
+    offline:    'Desconectado',
+  };
+
+  // Live state — kept in module scope so polls can do in-place updates
+  // instead of nuking and recreating Leaflet layers.
+  interface RouteEntry {
+    truck: any;
+    route: any | null;
+    color: string;
+    polylineLayer: any | null;
+    truckMarker: any | null;
+    stopMarkers: any[];
+  }
+  const entries = new Map<string, RouteEntry>();
+  let zoneFilter: string = '';
+  let zonesPopulated = false;
+
+  // ── Zone filter dropdown ──────────────────────────────────────────
+  function populateZoneFilter(trucks: any[]) {
+    if (zonesPopulated) return;
+    const select = document.getElementById('zone-filter') as HTMLSelectElement;
+    const zones = Array.from(new Set(trucks.map(t => t.zone))).sort();
+    for (const z of zones) {
+      const opt = document.createElement('option');
+      opt.value = z;
+      opt.textContent = z.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => {
+      zoneFilter = select.value;
+      applyZoneFilter();
+    });
+    zonesPopulated = true;
+  }
+
+  function applyZoneFilter() {
+    // Hide layers + list rows that don't match the active zone filter.
+    for (const [id, e] of entries.entries()) {
+      const visible = !zoneFilter || e.truck.zone === zoneFilter;
+      if (e.polylineLayer) {
+        if (visible) e.polylineLayer.addTo(map);
+        else map.removeLayer(e.polylineLayer);
+      }
+      if (e.truckMarker) {
+        if (visible) e.truckMarker.addTo(map);
+        else map.removeLayer(e.truckMarker);
+      }
+      for (const m of e.stopMarkers) {
+        if (visible) m.addTo(map);
+        else map.removeLayer(m);
+      }
+      const row = document.querySelector(`[data-route-row="${id}"]`);
+      if (row) (row as HTMLElement).style.display = visible ? '' : 'none';
+    }
+  }
+
+  // ── Markers ──────────────────────────────────────────────────────
+  function truckIcon(color: string, status: string) {
+    // Bigger than the dashboard one (this is THE rutas page) and shows
+    // the first 3 chars of the status as a tiny corner badge.
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:26px;height:26px;border-radius:8px;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700">T</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+    });
+  }
+
+  function stopIcon(order: number, color: string, collected: boolean) {
+    if (collected) {
+      return L.divIcon({
+        className: '',
+        html: `<div style="width:18px;height:18px;border-radius:50%;background:#94a3b8;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:white;font-size:10px;font-weight:700">✓</div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+    }
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:white;font-size:10px;font-weight:700">${order}</div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+  }
+
+  function clearEntry(e: RouteEntry) {
+    if (e.polylineLayer) { map.removeLayer(e.polylineLayer); e.polylineLayer = null; }
+    if (e.truckMarker)   { map.removeLayer(e.truckMarker);   e.truckMarker = null; }
+    for (const m of e.stopMarkers) map.removeLayer(m);
+    e.stopMarkers = [];
+  }
+
+  function renderRoute(e: RouteEntry) {
+    // Only call when e.route is non-null. Draws polyline (real OSRM
+    // geometry following streets) + numbered stops + truck marker on
+    // its current GPS position. All in one color = e.color.
+    if (!e.route || !e.route.polyline_geojson) return;
+
+    e.polylineLayer = L.geoJSON(e.route.polyline_geojson, {
+      style: { color: e.color, weight: 4, opacity: 0.85 },
+    }).addTo(map);
+
+    for (const stop of e.route.stops || []) {
+      const collected = stop.status === 'collected';
+      const m = L.marker([stop.latitude, stop.longitude], {
+        icon: stopIcon(stop.order + 1, e.color, collected),
+      })
+        .bindPopup(
+          `<b>Parada ${stop.order + 1}</b><br/>${stop.container_id}<br/>` +
+          `Nivel: ${Math.round(stop.fill_level * 100)}%<br/>` +
+          `Estado: ${collected ? 'Recolectado' : 'Pendiente'}`,
+        )
+        .addTo(map);
+      e.stopMarkers.push(m);
+    }
+
+    e.truckMarker = L.marker([e.truck.current_lat, e.truck.current_lon], {
+      icon: truckIcon(e.color, e.truck.status),
+      zIndexOffset: 1000,
+    })
+      .bindPopup(
+        `<b>${e.truck.name}</b><br/>${e.truck.id}<br/>` +
+        `Estado: ${STATUS_LABELS[e.truck.status] ?? e.truck.status}<br/>` +
+        `Carga: ${e.truck.current_load_m3.toFixed(1)} / ${e.truck.capacity_m3.toFixed(1)} m³`,
+      )
+      .addTo(map);
+  }
+
+  // ── Side panel ───────────────────────────────────────────────────
+  function renderSidePanel() {
+    const list = document.getElementById('route-list')!;
+    const items: string[] = [];
+    let totalActive = 0;
+    let totalDistance = 0;
+    let totalPending = 0;
+    let totalCollected = 0;
+
+    // Sort: active first (most stops descending), then idle/returning
+    const sortedEntries = Array.from(entries.values()).sort((a, b) => {
+      const aActive = a.truck.status === 'en_route' || a.truck.status === 'collecting' ? 1 : 0;
+      const bActive = b.truck.status === 'en_route' || b.truck.status === 'collecting' ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+      const aStops = a.route?.stops?.length ?? 0;
+      const bStops = b.route?.stops?.length ?? 0;
+      return bStops - aStops;
+    });
+
+    for (const e of sortedEntries) {
+      const status = STATUS_LABELS[e.truck.status] ?? e.truck.status;
+      const isActive = !!e.route;
+      if (isActive) {
+        totalActive++;
+        totalDistance += e.route.distance_km;
+        for (const s of e.route.stops || []) {
+          if (s.status === 'collected') totalCollected++;
+          else if (s.status === 'pending') totalPending++;
+        }
+      }
+
+      const stopsCount = e.route?.stops?.length ?? 0;
+      const collectedCount = e.route?.stops?.filter((s: any) => s.status === 'collected').length ?? 0;
+      const progress = stopsCount > 0 ? Math.round((collectedCount / stopsCount) * 100) : 0;
+
+      const distance = e.route ? `${e.route.distance_km.toFixed(1)} km` : '—';
+      const duration = e.route ? `${Math.round(e.route.duration_min)} min` : '—';
+      const stopsLabel = e.route ? `${collectedCount}/${stopsCount} paradas` : 'Sin ruta';
+
+      const zone = e.truck.zone.replace(/_/g, ' ');
+      items.push(`
+        <li>
+          <button
+            type="button"
+            data-route-row="${e.truck.id}"
+            class="w-full text-left bg-eco-bg-header hover:bg-eco-bg-panel border border-transparent hover:border-eco-border transition-colors rounded-lg px-3 py-2.5 flex flex-col gap-1.5"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-sm shrink-0" style="background:${e.color}"></span>
+                <span class="text-sm font-medium text-eco-text-primary truncate">${e.truck.name}</span>
+              </div>
+              <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
+                isActive ? 'bg-eco-info/15 text-eco-info' : 'bg-eco-bg-panel text-eco-text-secondary'
+              }">${status}</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-eco-text-secondary capitalize">
+              <span>${zone}</span>
+              <span>${distance} · ${duration}</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-eco-text-secondary">
+              <span>${stopsLabel}</span>
+              <span>${progress}%</span>
+            </div>
+            <div class="h-1 bg-eco-border rounded-full overflow-hidden">
+              <div class="h-full rounded-full" style="width:${progress}%;background:${e.color}"></div>
+            </div>
+          </button>
+        </li>`);
+    }
+
+    list.innerHTML = items.length > 0
+      ? items.join('')
+      : '<li class="text-xs text-eco-text-secondary">No hay camiones registrados.</li>';
+
+    // Click row → zoom to that route's bounds
+    list.querySelectorAll<HTMLElement>('[data-route-row]').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.dataset.routeRow!;
+        const e = entries.get(id);
+        if (!e) return;
+        if (e.polylineLayer) {
+          map.fitBounds(e.polylineLayer.getBounds().pad(0.1));
+        } else {
+          map.setView([e.truck.current_lat, e.truck.current_lon], 14);
+        }
+      });
+    });
+
+    // Stats
+    document.getElementById('stat-active')!.textContent = String(totalActive);
+    document.getElementById('stat-pending')!.textContent = String(totalPending);
+    document.getElementById('stat-collected')!.textContent = String(totalCollected);
+    document.getElementById('stat-distance')!.textContent = `${totalDistance.toFixed(1)} km`;
+
+    const summary = document.getElementById('routes-summary')!;
+    summary.textContent = `${totalActive} rutas activas · ${entries.size} camiones · ${totalPending + totalCollected} stops totales`;
+  }
+
+  // ── Data flow ────────────────────────────────────────────────────
+  let firstRender = true;
+
+  async function refresh() {
+    try {
+      const res = await fetch(`${API}/api/v1/trucks/`);
+      if (!res.ok) return;
+      const trucks: any[] = await res.json();
+
+      populateZoneFilter(trucks);
+
+      // Determine which trucks need a route fetch (active and we don't
+      // have it yet, or the route_id changed).
+      const routeFetches: Promise<void>[] = [];
+      const seen = new Set<string>();
+
+      for (const t of trucks) {
+        seen.add(t.id);
+        let e = entries.get(t.id);
+        if (!e) {
+          e = {
+            truck: t,
+            route: null,
+            color: colorForTruck(t.id),
+            polylineLayer: null,
+            truckMarker: null,
+            stopMarkers: [],
+          };
+          entries.set(t.id, e);
+        } else {
+          // In-place truck update; the marker (if exists) gets repositioned
+          // below.
+          e.truck = t;
+        }
+
+        if (t.current_route_id) {
+          // Need a route — fetch only if route_id changed or we don't have one
+          const need = !e.route || e.route.id !== t.current_route_id;
+          if (need) {
+            routeFetches.push(
+              (async () => {
+                try {
+                  const r = await fetch(`${API}/api/v1/trucks/${t.id}/route`);
+                  if (r.ok) {
+                    const routeData = await r.json();
+                    const old = entries.get(t.id);
+                    if (old) {
+                      clearEntry(old);
+                      old.route = routeData;
+                      renderRoute(old);
+                    }
+                  }
+                } catch {}
+              })(),
+            );
+          } else if (e.truckMarker) {
+            // Same route — just move the truck marker
+            e.truckMarker.setLatLng([t.current_lat, t.current_lon]);
+          }
+        } else {
+          // Truck has no active route; clear any leftover layers
+          if (e.route) {
+            clearEntry(e);
+            e.route = null;
+          }
+        }
+      }
+
+      // Remove entries for trucks the backend forgot about
+      for (const [id, e] of entries.entries()) {
+        if (!seen.has(id)) {
+          clearEntry(e);
+          entries.delete(id);
+        }
+      }
+
+      await Promise.all(routeFetches);
+      renderSidePanel();
+      applyZoneFilter();
+
+      // First render: zoom to fit all polylines
+      if (firstRender) {
+        firstRender = false;
+        const bounds = L.latLngBounds([]);
+        let any = false;
+        for (const e of entries.values()) {
+          if (e.polylineLayer) {
+            bounds.extend(e.polylineLayer.getBounds());
+            any = true;
+          }
+        }
+        if (any) map.fitBounds(bounds.pad(0.1));
+      }
+    } catch {}
+  }
+
+  // ── Optimize button ──────────────────────────────────────────────
+  document.getElementById('optimize-btn')!.addEventListener('click', async () => {
+    const btn = document.getElementById('optimize-btn') as HTMLButtonElement;
+    const result = document.getElementById('optimize-result')!;
+    btn.textContent = 'Optimizando…';
+    btn.disabled = true;
+    result.classList.add('hidden');
+
+    try {
+      const res = await (window as any).__authFetch__(`/api/v1/routes/optimize`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        result.textContent = data.detail || 'Error al optimizar rutas';
+        result.className = 'text-xs px-3 py-2 rounded-lg bg-eco-danger/10 text-eco-danger border border-eco-danger/30';
+        result.classList.remove('hidden');
+        return;
+      }
+      result.textContent = `${data.message} (generadas: ${data.generated}, sin cambios: ${data.skipped})`;
+      result.className = 'text-xs px-3 py-2 rounded-lg bg-eco-green/10 text-eco-green border border-eco-green/30';
+      result.classList.remove('hidden');
+      // Re-fetch immediately so the new routes appear without waiting 15s
+      await refresh();
+    } catch {
+      result.textContent = 'Error de red al optimizar rutas';
+      result.className = 'text-xs px-3 py-2 rounded-lg bg-eco-danger/10 text-eco-danger border border-eco-danger/30';
+      result.classList.remove('hidden');
+    } finally {
+      btn.textContent = 'Optimizar rutas';
+      btn.disabled = false;
+    }
+  });
+
+  // ── Bootstrap ────────────────────────────────────────────────────
+  refresh();
+  // 15s — fast enough to see stops flip pending→collected, slow enough
+  // not to spam OSRM-backed route fetches.
+  const interval = setInterval(refresh, 15_000);
+
+  // Pause polling when tab is hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearInterval(interval);
+    }
+  });
+</script>
