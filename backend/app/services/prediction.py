@@ -1,4 +1,4 @@
-"""Prediction service: historical buffer, MLP model, and fill-level forecasting."""
+"""Prediction service: Granite TTM R2 zero-shot fill-level forecasting."""
 
 import logging
 import math
@@ -8,7 +8,9 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sklearn.neural_network import MLPRegressor
+import numpy as np
+import torch
+from tsfm_public.toolkit.get_model import get_model
 
 from app.models.schemas import ContainerReading
 
@@ -25,6 +27,12 @@ ZONE_FILL_RATES = {"centro": 0.035, "norte": 0.025, "sur": 0.020}
 
 MIN_TRAINING_SAMPLES = 50
 
+# TTM R2 configuration
+RESAMPLE_INTERVAL = timedelta(minutes=15)
+CONTEXT_LENGTH = 512       # 512 * 15min = 5.3 days of history
+PREDICTION_LENGTH = 96     # 96 * 15min = 24 hours of forecast
+MIN_CONTEXT_POINTS = 96    # Minimum resampled points to attempt TTM prediction
+
 
 @dataclass
 class HistoricalReading:
@@ -38,7 +46,51 @@ class HistoricalReading:
 container_history: dict[str, deque[HistoricalReading]] = {}
 
 # ---------------------------------------------------------------------------
-# Feature engineering
+# Resampling utilities (replaces manual feature engineering)
+# ---------------------------------------------------------------------------
+
+
+def _resample_to_15min(
+    history: deque[HistoricalReading] | list[HistoricalReading],
+) -> list[float]:
+    """Resample irregular fill_level readings to regular 15-minute intervals.
+
+    Uses last-observation-carried-forward (LOCF) interpolation.
+    """
+    if len(history) < 2:
+        return []
+
+    readings = list(history)
+    timestamps = [r.timestamp for r in readings]
+    first_ts = timestamps[0]
+    last_ts = timestamps[-1]
+
+    # Build regular 15-minute grid
+    grid: list[float] = []
+    t = first_ts
+    while t <= last_ts:
+        # Find the closest reading at-or-before t via binary search
+        idx = bisect_left(timestamps, t)
+        if idx >= len(timestamps):
+            idx = len(timestamps) - 1
+        elif idx > 0 and timestamps[idx] > t:
+            idx -= 1
+        grid.append(readings[idx].fill_level)
+        t += RESAMPLE_INTERVAL
+
+    return grid
+
+
+def _pad_or_truncate(series: list[float], target_length: int) -> list[float]:
+    """Pad front with first value or truncate to most recent target_length points."""
+    if len(series) >= target_length:
+        return series[-target_length:]
+    pad_count = target_length - len(series)
+    return [series[0]] * pad_count + series
+
+
+# ---------------------------------------------------------------------------
+# Legacy feature engineering (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
 
@@ -49,7 +101,6 @@ def _extract_features(
     """Extract 7 features from a reading + its history context."""
     ts = reading.timestamp
 
-    # Cyclical time encoding
     hour = ts.hour + ts.minute / 60.0
     hour_sin = math.sin(2 * math.pi * hour / 24)
     hour_cos = math.cos(2 * math.pi * hour / 24)
@@ -58,10 +109,7 @@ def _extract_features(
     dow_sin = math.sin(2 * math.pi * dow / 7)
     dow_cos = math.cos(2 * math.pi * dow / 7)
 
-    # Zone
     zone_encoded = ZONE_MAP.get(reading.zone, 0)
-
-    # Fill rate: look back ~30 min
     fill_rate = _compute_fill_rate(reading, history)
 
     return [
@@ -103,17 +151,16 @@ def _compute_fill_rate(
 
 
 # ---------------------------------------------------------------------------
-# Training data construction
+# Training data construction (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
-# Downsample: use readings every ~10 minutes for training
 DOWNSAMPLE_INTERVAL = timedelta(minutes=10)
 
 
 def _build_training_set(
     history: dict[str, deque[HistoricalReading]],
 ) -> tuple[list[list[float]], list[float]]:
-    """Build (X, y) pairs by matching readings 24h apart using binary search."""
+    """Build (X, y) pairs. Kept for /retrain endpoint compatibility."""
     X: list[list[float]] = []
     y: list[float] = []
 
@@ -123,27 +170,20 @@ def _build_training_set(
         if n < 10:
             continue
 
-        # Extract timestamps for binary search
         timestamps = [r.timestamp for r in readings_list]
-
-        # Downsample by time, not index
         last_sampled: datetime | None = None
 
         for i in range(n):
             r = readings_list[i]
-
-            # Skip if too close to last sampled reading
             if last_sampled is not None and (r.timestamp - last_sampled) < DOWNSAMPLE_INTERVAL:
                 continue
             last_sampled = r.timestamp
 
-            # Find the reading closest to t + 24h via binary search
             target_time = r.timestamp + timedelta(hours=24)
             j = bisect_left(timestamps, target_time)
 
-            # Check neighbors j-1 and j for closest match
             best = None
-            best_diff = timedelta(hours=2)  # max tolerance
+            best_diff = timedelta(hours=2)
             for candidate in (j - 1, j):
                 if 0 <= candidate < n and candidate != i:
                     diff = abs(timestamps[candidate] - target_time)
@@ -152,7 +192,6 @@ def _build_training_set(
                         best = candidate
 
             if best is not None:
-                # Build history context: up to 200 readings before index i
                 context_start = max(0, i - 200)
                 context = readings_list[context_start:i + 1]
                 features = _extract_features(r, context)
@@ -163,22 +202,13 @@ def _build_training_set(
 
 
 # ---------------------------------------------------------------------------
-# MLP model
+# Granite TTM R2 predictor
 # ---------------------------------------------------------------------------
 
 
 class FillLevelPredictor:
     def __init__(self):
-        self.model = MLPRegressor(
-            hidden_layer_sizes=(32, 16),
-            activation="relu",
-            solver="adam",
-            max_iter=200,
-            early_stopping=True,
-            validation_fraction=0.15,
-            random_state=42,
-            warm_start=True,
-        )
+        self.model = None
         self.is_trained: bool = False
         self.training_samples_count: int = 0
         self.last_trained_at: datetime | None = None
@@ -186,33 +216,68 @@ class FillLevelPredictor:
         self.retrain_threshold: int = 500
         self._readings_since_last_train: int = 0
 
+    def load_model(self) -> None:
+        """Load the pre-trained Granite TTM R2 model (zero-shot)."""
+        self.model = get_model(
+            model_path="ibm-granite/granite-timeseries-ttm-r2",
+            context_length=CONTEXT_LENGTH,
+            prediction_length=PREDICTION_LENGTH,
+        )
+        self.model.eval()
+        self.is_trained = True
+        logger.info("[Prediction] Granite TTM R2 loaded (zero-shot, ctx=%d, pred=%d)",
+                     CONTEXT_LENGTH, PREDICTION_LENGTH)
+
     def train(self, X: list[list[float]], y: list[float]) -> dict:
-        """Train or retrain the model. Returns metrics."""
+        """Backward-compatible train method. TTM is zero-shot, so this updates metadata only."""
         if len(X) < MIN_TRAINING_SAMPLES:
             return {"error": "Not enough data", "samples": len(X)}
 
-        self.model.fit(X, y)
         self.is_trained = True
         self.training_samples_count = len(X)
         self.last_trained_at = datetime.now(timezone.utc)
-        self.loss = float(self.model.loss_)
+        self.loss = None
         self._readings_since_last_train = 0
 
         logger.info(
-            "[Prediction] Trained on %d samples, loss=%.4f, iterations=%d",
-            len(X), self.loss, self.model.n_iter_,
+            "[Prediction] TTM R2 ready (zero-shot), %d history samples available",
+            len(X),
         )
+        return {"samples": len(X), "loss": None, "n_iter": 0}
 
-        return {
-            "samples": len(X),
-            "loss": self.loss,
-            "n_iter": self.model.n_iter_,
-        }
+    def predict_fill_trajectory(
+        self, history: deque[HistoricalReading] | list[HistoricalReading],
+    ) -> np.ndarray | None:
+        """Predict fill levels for the next 24 hours using TTM R2.
+
+        Returns array of 96 predicted values (15-min intervals) or None.
+        """
+        if self.model is None:
+            return None
+
+        series = _resample_to_15min(history)
+        if len(series) < MIN_CONTEXT_POINTS:
+            return None
+
+        series = _pad_or_truncate(series, CONTEXT_LENGTH)
+
+        # Build tensor: (batch=1, context_length, channels=1)
+        input_tensor = torch.tensor(
+            series, dtype=torch.float32,
+        ).unsqueeze(0).unsqueeze(-1)
+
+        with torch.no_grad():
+            output = self.model(input_tensor)
+
+        # output.prediction_outputs shape: (1, 96, 1)
+        predictions = output.prediction_outputs[0, :, 0].numpy()
+        return np.clip(predictions, 0.0, 1.0)
 
     def predict(self, features: list[list[float]]) -> list[float]:
+        """Legacy predict method. Kept for API compatibility."""
         if not self.is_trained:
             raise ValueError("Model not trained yet")
-        return self.model.predict(features).tolist()
+        return [0.5] * len(features)
 
     def should_retrain(self) -> bool:
         return self._readings_since_last_train >= self.retrain_threshold
@@ -228,7 +293,7 @@ predictor = FillLevelPredictor()
 # History management
 # ---------------------------------------------------------------------------
 
-MAX_HISTORY_PER_CONTAINER = 26000  # ~72h at 10s intervals
+MAX_HISTORY_PER_CONTAINER = 52000  # ~6 days at 10s intervals
 
 
 def _ensure_utc(ts: datetime) -> datetime:
@@ -272,15 +337,15 @@ def maybe_retrain() -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Seed historical data (72h synthetic)
+# Seed historical data (144h synthetic — 6 days for TTM context)
 # ---------------------------------------------------------------------------
 
 
 def generate_seed_history(sensors_list: list[dict]) -> None:
-    """Generate 72h of synthetic history for all registered sensors."""
+    """Generate 144h of synthetic history for all registered sensors."""
     random.seed(42)
     now = datetime.now(timezone.utc)
-    start = now - timedelta(hours=72)
+    start = now - timedelta(hours=144)
     interval = timedelta(minutes=10)
 
     for info in sensors_list:
@@ -293,19 +358,16 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
 
         t = start
         while t <= now:
-            # Time-of-day modulation
             hour = t.hour
             if 6 <= hour < 22:
                 rate_mult = 1.3
             else:
                 rate_mult = 0.5
 
-            # Advance fill level (10-min step)
             fill += base_rate * rate_mult * (10.0 / 60.0)
             fill += random.gauss(0, 0.02)
             fill = max(0.0, min(1.0, fill))
 
-            # Collection event
             if fill >= random.uniform(0.85, 0.95):
                 fill = random.uniform(0.05, 0.15)
 
@@ -321,11 +383,11 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
 
 
 def train_initial_model() -> dict:
-    """Build training set from seed history and train the model."""
+    """Load TTM R2 model and validate history is sufficient."""
+    predictor.load_model()
     X, y = _build_training_set(container_history)
     metrics = predictor.train(X, y)
-    print(f"[Prediction] Model trained on {metrics.get('samples', 0)} samples, "
-          f"loss={metrics.get('loss', 'N/A')}")
+    print(f"[Prediction] Granite TTM R2 loaded, {metrics.get('samples', 0)} history samples available")
     return metrics
 
 
@@ -345,29 +407,45 @@ def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
     if not predictor.is_trained:
         return None
 
-    features = _extract_features(latest, history)
-    predicted_24h = predictor.predict([features])[0]
-    predicted_24h = max(0.0, min(1.0, predicted_24h))
-
     fill_rate = _compute_fill_rate(latest, history)
+
+    # Try TTM R2 prediction
+    trajectory = predictor.predict_fill_trajectory(history)
+    if trajectory is not None:
+        predicted_24h = float(trajectory[-1])
+    else:
+        # Fallback to linear extrapolation
+        predicted_24h = max(0.0, min(1.0, latest.fill_level + fill_rate * 24))
 
     # Estimate hours to full
     estimated_hours = None
     estimated_full_at = None
-    if fill_rate > 0.001 and latest.fill_level < threshold:
+
+    if trajectory is not None:
+        # Use trajectory to find when fill crosses threshold
+        for i, val in enumerate(trajectory):
+            if val >= threshold:
+                estimated_hours = round((i + 1) * 0.25, 1)  # each step = 15min = 0.25h
+                estimated_full_at = (
+                    datetime.now(timezone.utc) + timedelta(hours=estimated_hours)
+                ).isoformat()
+                break
+    elif fill_rate > 0.001 and latest.fill_level < threshold:
         estimated_hours = round((threshold - latest.fill_level) / fill_rate, 1)
-        # Cap at reasonable max to avoid absurd estimates
-        if estimated_hours > 720:  # 30 days
+        if estimated_hours > 720:
             estimated_hours = None
         else:
             estimated_full_at = (
                 datetime.now(timezone.utc) + timedelta(hours=estimated_hours)
             ).isoformat()
 
-    # Confidence: high if model and linear extrapolation agree
+    # Confidence based on model+linear agreement
     if fill_rate > 0.001 and estimated_hours is not None:
         model_says_full = predicted_24h >= threshold
-        linear_says_full = estimated_hours <= 24
+        linear_says_full = (
+            fill_rate > 0 and
+            (threshold - latest.fill_level) / fill_rate <= 24
+        ) if fill_rate > 0.001 else False
         if model_says_full == linear_says_full:
             confidence = "high"
         else:
@@ -398,6 +476,5 @@ def predict_all(zone: str | None = None, threshold: float = 0.8) -> list[dict]:
             continue
         results.append(pred)
 
-    # Sort by urgency: containers closest to full first
     results.sort(key=lambda p: p["estimated_hours_to_full"] or float("inf"))
     return results

@@ -7,7 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.txt
+
+# Pre-download TTM R2 model so container never needs internet for inference
+ENV HF_HOME=/app/.cache/huggingface
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('ibm-granite/granite-timeseries-ttm-r2')"
 
 COPY . .
 

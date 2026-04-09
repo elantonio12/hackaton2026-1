@@ -14,3 +14,5 @@ alembic==1.15.2
 python-jose[cryptography]==3.4.0
 scikit-learn==1.6.1
 bcrypt==4.3.0
+granite-tsfm>=0.2.11
+torch>=2.1.0
