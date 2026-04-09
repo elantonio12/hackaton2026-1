@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions, metrics, user
+from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions, metrics, user, trucks
 from app.core.config import settings
 
 app = FastAPI(
@@ -27,6 +27,7 @@ app.include_router(sensors.router, prefix="/api/v1/sensors", tags=["sensors"])
 app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["predictions"])
 app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["metrics"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
+app.include_router(trucks.router, prefix="/api/v1/trucks", tags=["trucks"])
 
 
 @app.on_event("startup")
@@ -46,6 +47,10 @@ async def startup():
     # 3. Seed sensor registry
     async with async_session() as db:
         await sensors.seed_sensor_registry(db)
+
+    # 3b. Seed truck fleet (15 trucks across 3 depots)
+    async with async_session() as db:
+        await trucks.seed_truck_fleet(db)
 
     # 4. Load sensors from DB for prediction seed history
     async with async_session() as db:

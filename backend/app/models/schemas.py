@@ -192,3 +192,59 @@ class MetricsResponse(BaseModel):
     system: SystemStatus
     zones: list[ZoneMetrics]
     generated_at: str
+
+
+# ---------------------------------------------------------------------------
+# Trucks (operational fleet)
+# ---------------------------------------------------------------------------
+
+class TruckOut(BaseModel):
+    id: str
+    name: str
+    zone: str
+    capacity_m3: float
+    current_load_m3: float
+    depot_lat: float
+    depot_lon: float
+    current_lat: float
+    current_lon: float
+    status: str  # idle | en_route | collecting | returning | offline
+    current_route_id: int | None = None
+    updated_at: str
+
+
+class TruckLocationUpdate(BaseModel):
+    """Payload posted by the truck simulator on every tick."""
+    latitude: float
+    longitude: float
+    status: Optional[str] = None
+    current_load_m3: Optional[float] = None
+    current_route_id: Optional[int] = None
+
+
+class TruckRouteStop(BaseModel):
+    order: int
+    container_id: str
+    latitude: float
+    longitude: float
+    fill_level: float
+    status: str  # pending | collected | skipped
+    distance_along_route_m: float
+
+
+class ActiveRouteOut(BaseModel):
+    id: int
+    truck_id: str
+    stops: list[TruckRouteStop]
+    polyline_geojson: dict
+    distance_km: float
+    duration_min: float
+    status: str
+    started_at: str
+    completed_at: str | None = None
+
+
+class OptimizeAllResponse(BaseModel):
+    generated: int
+    skipped: int
+    message: str

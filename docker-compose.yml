@@ -7,6 +7,7 @@ services:
       - .env
     environment:
       - HF_HOME=/app/.cache/huggingface
+      - OSRM_URL=http://osrm:5000
     volumes:
       - hf_cache:/app/.cache/huggingface
     depends_on:
@@ -14,8 +15,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Simulator has been moved to vps2 — see simulator/docker-compose.vps2.yml
-  # It now runs 10,000 containers across CDMX alcaldías with unique IPv6
+  # Sensor simulator has been moved to vps2 — see simulator/docker-compose.vps2.yml
+  # It now runs 10,000 containers across CDMX alcaldias with unique IPv6
   # source addresses, posting to this backend over Tailscale.
 
   db:
@@ -34,6 +35,43 @@ services:
       timeout: 3s
       retries: 5
 
+  # Self-hosted OSRM router with CDMX street network. First start downloads
+  # the OSM extract and preprocesses the routing graph (~3-5 minutes); the
+  # processed graph is persisted to the osrm_data volume so subsequent
+  # restarts are instant. The backend talks to it at http://osrm:5000.
+  osrm:
+    build: ./osrm
+    volumes:
+      - osrm_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -fs http://localhost:5000/route/v1/driving/-99.13,19.43;-99.12,19.44 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 600s
+
+  # Operational truck simulator: 15 trucks across 3 depots, advances along
+  # OSRM-generated polylines, posts location updates and collection events
+  # to the backend. Authenticates with the same shared sensor token used
+  # by the IoT sensor simulator.
+  truck-simulator:
+    build:
+      context: .
+      dockerfile: simulator-trucks/Dockerfile
+    env_file:
+      - .env
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - TICK_SECONDS=5
+      - BASE_SPEED_KMH=30
+      - DEMO_SPEED_MULT=8
+      - COLLECTION_TICKS=2
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   pgdata:
   hf_cache:
+  osrm_data:
