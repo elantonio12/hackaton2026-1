@@ -3,9 +3,11 @@
 import math
 from datetime import datetime, timezone
 
-from app.api.routes.containers import container_readings
-from app.api.routes.collectors import collectors_db
-from app.api.routes.sensors import sensor_registry
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import Collector, ContainerReading, Sensor
+from app.models.schemas import ContainerReading as ContainerReadingSchema
 from app.services.optimizer import _haversine, optimize_routes
 from app.services.prediction import (
     container_history,
@@ -34,12 +36,21 @@ STANDARD_ROUTE_OVERHEAD = 1.30
 AVG_SPEED_KMH = 30
 
 
-def compute_metrics(
+async def compute_metrics(
+    db: AsyncSession,
     num_vehicles: int = 3,
     fill_threshold: float = 0.8,
 ) -> dict:
     """Compute all metrics from current system state."""
-    readings = list(container_readings.values())
+    # Query from DB
+    readings_result = await db.execute(select(ContainerReading))
+    reading_rows = readings_result.scalars().all()
+    readings = [ContainerReadingSchema(**r.to_dict()) for r in reading_rows]
+
+    sensor_count = (await db.execute(select(func.count()).select_from(Sensor))).scalar() or 0
+
+    collectors_result = await db.execute(select(Collector))
+    collector_rows = collectors_result.scalars().all()
 
     # --- Efficiency ---
     route_result = optimize_routes(readings, num_vehicles, fill_threshold)
@@ -98,9 +109,9 @@ def compute_metrics(
 
     system = {
         "total_containers_monitored": len(readings),
-        "total_sensors_registered": len(sensor_registry),
-        "total_collectors": len(collectors_db),
-        "active_collectors": sum(1 for c in collectors_db.values() if c.get("activo", False)),
+        "total_sensors_registered": sensor_count,
+        "total_collectors": len(collector_rows),
+        "active_collectors": sum(1 for c in collector_rows if c.activo),
         "containers_critical": len(critical),
         "containers_predicted_full_24h": predicted_full_24h,
         "prediction_model_trained": predictor.is_trained,

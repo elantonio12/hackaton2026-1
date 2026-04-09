@@ -1,60 +1,71 @@
-from fastapi import APIRouter, HTTPException
-from datetime import datetime
-from app.models.schemas import Collector, CollectorCreate, CollectorUpdate
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.database import get_db
+from app.db.models import Collector
+from app.models.schemas import CollectorCreate, CollectorUpdate
+from app.models.schemas import Collector as CollectorSchema
 
 router = APIRouter()
 
-# In-memory store igual que containers.py (para la demo)
-collectors_db: dict[int, dict] = {}
-counter = 1
 
-@router.post("/", response_model=Collector)
-async def create_collector(collector: CollectorCreate):
-    """Registrar un nuevo recolector."""
-    global counter
-    now = datetime.now()
-    new_collector = {
-        "id": counter,
-        **collector.model_dump(),
-        "created_at": now,
-        "updated_at": now,
-    }
-    collectors_db[counter] = new_collector
-    counter += 1
-    return new_collector
+@router.post("/", response_model=CollectorSchema)
+async def create_collector(collector: CollectorCreate, db: AsyncSession = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    row = Collector(**collector.model_dump(), created_at=now, updated_at=now)
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row.to_dict()
 
-@router.get("/", response_model=list[Collector])
-async def get_collectors(zona: str = None, activo: bool = None):
-    """Obtener todos los recolectores. Filtra por zona o estado."""
-    result = list(collectors_db.values())
+
+@router.get("/", response_model=list[CollectorSchema])
+async def get_collectors(
+    zona: str = None, activo: bool = None, db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Collector)
     if zona:
-        result = [c for c in result if c["zona"] == zona]
+        stmt = stmt.where(Collector.zona == zona)
     if activo is not None:
-        result = [c for c in result if c["activo"] == activo]
-    return result
+        stmt = stmt.where(Collector.activo == activo)
+    result = await db.execute(stmt)
+    return [r.to_dict() for r in result.scalars().all()]
 
-@router.get("/{collector_id}", response_model=Collector)
-async def get_collector(collector_id: int):
-    """Obtener un recolector por ID."""
-    if collector_id not in collectors_db:
-        raise HTTPException(status_code=404, detail="Recolector no encontrado")
-    return collectors_db[collector_id]
 
-@router.put("/{collector_id}", response_model=Collector)
-async def update_collector(collector_id: int, updates: CollectorUpdate):
-    """Actualizar datos de un recolector."""
-    if collector_id not in collectors_db:
+@router.get("/{collector_id}", response_model=CollectorSchema)
+async def get_collector(collector_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Collector).where(Collector.id == collector_id))
+    row = result.scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Recolector no encontrado")
-    collector = collectors_db[collector_id]
+    return row.to_dict()
+
+
+@router.put("/{collector_id}", response_model=CollectorSchema)
+async def update_collector(
+    collector_id: int, updates: CollectorUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Collector).where(Collector.id == collector_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Recolector no encontrado")
     for field, value in updates.model_dump(exclude_unset=True).items():
-        collector[field] = value
-    collector["updated_at"] = datetime.now()
-    return collector
+        setattr(row, field, value)
+    row.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    return row.to_dict()
+
 
 @router.delete("/{collector_id}")
-async def delete_collector(collector_id: int):
-    """Eliminar un recolector."""
-    if collector_id not in collectors_db:
+async def delete_collector(collector_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Collector).where(Collector.id == collector_id))
+    row = result.scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Recolector no encontrado")
-    del collectors_db[collector_id]
+    await db.delete(row)
+    await db.commit()
     return {"status": "deleted", "id": collector_id}

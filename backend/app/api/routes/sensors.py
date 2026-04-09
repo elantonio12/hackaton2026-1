@@ -3,8 +3,13 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.routes.containers import container_readings
+from app.db.database import get_db
+from app.db.models import ContainerReading as ContainerReadingModel
+from app.db.models import Sensor
 from app.core.config import settings
 from app.models.schemas import (
     ContainerReading,
@@ -16,9 +21,6 @@ from app.models.schemas import (
 router = APIRouter()
 sensor_security = HTTPBearer()
 
-# In-memory sensor registry: sensor_id -> metadata
-sensor_registry: dict[str, dict] = {}
-
 # ---------------------------------------------------------------------------
 # Auth dependency
 # ---------------------------------------------------------------------------
@@ -26,11 +28,10 @@ sensor_registry: dict[str, dict] = {}
 async def verify_sensor_token(
     credentials: HTTPAuthorizationCredentials = Depends(sensor_security),
 ) -> str:
-    """Validate that the request carries the correct sensor API key."""
     if credentials.credentials != settings.sensor_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de sensor inválido",
+            detail="Token de sensor invalido",
         )
     return credentials.credentials
 
@@ -46,23 +47,29 @@ ZONES = {
 CONTAINERS_PER_ZONE = 17
 
 
-def seed_sensor_registry() -> None:
-    """Pre-populate registry with 50 demo sensors matching simulator containers."""
-    random.seed(42)  # reproducible coordinates
+async def seed_sensor_registry(db: AsyncSession) -> None:
+    random.seed(42)
     idx = 1
+    sensors = []
     for zone_name, center in ZONES.items():
         count = CONTAINERS_PER_ZONE if zone_name != "sur" else 16
         for _ in range(count):
             container_id = f"CNT-{idx:03d}"
             sensor_id = f"SENSOR-{container_id}"
-            sensor_registry[sensor_id] = {
+            sensors.append({
                 "sensor_id": sensor_id,
                 "container_id": container_id,
                 "latitude": round(center["lat"] + random.uniform(-0.02, 0.02), 6),
                 "longitude": round(center["lon"] + random.uniform(-0.02, 0.02), 6),
                 "zone": zone_name,
-            }
+            })
             idx += 1
+
+    if sensors:
+        stmt = pg_insert(Sensor).values(sensors)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["sensor_id"])
+        await db.execute(stmt)
+        await db.commit()
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -72,25 +79,33 @@ def seed_sensor_registry() -> None:
 async def register_sensor(
     reg: SensorRegistration,
     _token: str = Depends(verify_sensor_token),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Register a new sensor or update its location."""
-    sensor_registry[reg.sensor_id] = reg.model_dump()
+    data = reg.model_dump()
+    stmt = pg_insert(Sensor).values(**data)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["sensor_id"],
+        set_={k: stmt.excluded[k] for k in data if k != "sensor_id"},
+    )
+    await db.execute(stmt)
+    await db.commit()
     return reg
 
 
 @router.get("/registry", response_model=list[SensorInfo])
-async def list_sensors():
-    """List all registered sensors."""
-    return list(sensor_registry.values())
+async def list_sensors(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Sensor))
+    return [s.to_dict() for s in result.scalars().all()]
 
 
 @router.post("/readings")
 async def receive_sensor_reading(
     payload: SensorPayload,
     _token: str = Depends(verify_sensor_token),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Receive a reading from a physical sensor. Requires sensor API key."""
-    info = sensor_registry.get(payload.sensor_id)
+    result = await db.execute(select(Sensor).where(Sensor.sensor_id == payload.sensor_id))
+    info = result.scalar_one_or_none()
     if not info:
         raise HTTPException(
             status_code=404,
@@ -99,16 +114,25 @@ async def receive_sensor_reading(
         )
 
     reading = ContainerReading(
-        container_id=info["container_id"],
-        latitude=info["latitude"],
-        longitude=info["longitude"],
+        container_id=info.container_id,
+        latitude=info.latitude,
+        longitude=info.longitude,
         fill_level=payload.fill_level,
-        zone=info["zone"],
+        zone=info.zone,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
-    container_readings[reading.container_id] = reading
+    # Upsert into DB
+    data = reading.model_dump()
+    stmt = pg_insert(ContainerReadingModel).values(**data)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["container_id"],
+        set_={k: stmt.excluded[k] for k in data if k != "container_id"},
+    )
+    await db.execute(stmt)
+    await db.commit()
 
+    # In-memory prediction service
     from app.services.prediction import append_reading, maybe_retrain
     append_reading(reading)
     maybe_retrain()
