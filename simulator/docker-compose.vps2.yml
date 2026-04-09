@@ -22,6 +22,7 @@ services:
     network_mode: host
     restart: unless-stopped
     environment:
+      PYTHONUNBUFFERED: "1"
       BACKEND_URL: "http://100.89.207.110:8000"
       NUM_CONTAINERS: "10000"
       INTERVAL_SECONDS: "60"
