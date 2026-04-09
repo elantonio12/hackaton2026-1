@@ -1,6 +1,6 @@
 """Routes router.
 
-Operational route generation now uses:
+Operational route generation uses:
   - OR-Tools CVRP solver (services/vrp_solver.py) — capacity-aware
   - Self-hosted OSRM (services/osrm_client.py) — real driving distances
     and street polylines
@@ -8,10 +8,6 @@ Operational route generation now uses:
 `POST /routes/optimize` is the main entry point. It looks at all currently
 idle trucks and all currently critical containers, runs CVRP, persists
 one Route per truck, assigns it to the truck, and returns a summary.
-
-The legacy greedy nearest-neighbor optimizer in services/optimizer.py
-is kept around as a fallback for when OSRM is unavailable (cold start
-during preprocessing) but should not be used in normal operation.
 """
 from __future__ import annotations
 
