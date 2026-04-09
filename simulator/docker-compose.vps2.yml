@@ -1,0 +1,31 @@
+# Simulator-only compose for deployment on vps2.
+#
+# Points to the backend running on vps1 over Tailscale for privacy
+# (no need to expose :8000 publicly). Uses host networking so that the
+# simulator can bind arbitrary IPv6 source addresses from the vps2 /64
+# block without Docker's IPv6 subnet plumbing getting in the way.
+#
+# Prerequisite on the host:
+#     sysctl net.ipv6.ip_nonlocal_bind=1
+#
+# Usage:
+#     cd simulator
+#     docker compose -f docker-compose.vps2.yml up -d --build
+#     docker compose -f docker-compose.vps2.yml logs -f
+
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecoruta-simulator
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: "http://100.89.207.110:8000"
+      NUM_CONTAINERS: "10000"
+      INTERVAL_SECONDS: "60"
+      BATCH_SIZE: "500"
+      IPV6_ENABLED: "true"
+      IPV6_PREFIX: "2605:a140:2302:3245::"
+      IPV6_CLIENTS: "100"

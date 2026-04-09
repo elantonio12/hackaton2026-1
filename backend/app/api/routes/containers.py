@@ -28,6 +28,38 @@ async def receive_reading(reading: ContainerReadingSchema, db: AsyncSession = De
     return {"status": "received", "container_id": reading.container_id}
 
 
+@router.post("/readings/bulk")
+async def receive_bulk_readings(
+    readings: list[ContainerReadingSchema],
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk ingest for high-throughput simulators (10K+ sensors).
+
+    Performs a single batch upsert and commit, then updates the in-memory
+    prediction history for each reading.
+    """
+    if not readings:
+        return {"status": "received", "count": 0}
+
+    # Batch upsert: one pg_insert with ON CONFLICT per row, single commit
+    payloads = [r.model_dump() for r in readings]
+    for data in payloads:
+        stmt = pg_insert(ContainerReading).values(**data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["container_id"],
+            set_={k: stmt.excluded[k] for k in data if k != "container_id"},
+        )
+        await db.execute(stmt)
+    await db.commit()
+
+    # Feed in-memory prediction history
+    from app.services.prediction import append_reading
+    for reading in readings:
+        append_reading(reading)
+
+    return {"status": "received", "count": len(readings)}
+
+
 @router.get("/readings", response_model=list[ContainerReadingSchema])
 async def get_all_readings(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ContainerReading))

@@ -14,11 +14,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  simulator:
-    build: ./simulator
-    depends_on:
-      - backend
-    restart: unless-stopped
+  # Simulator has been moved to vps2 — see simulator/docker-compose.vps2.yml
+  # It now runs 10,000 containers across CDMX alcaldías with unique IPv6
+  # source addresses, posting to this backend over Tailscale.
 
   db:
     image: postgis/postgis:16-3.4

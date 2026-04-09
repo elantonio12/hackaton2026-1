@@ -1,35 +1,15 @@
-"""Simulated container definitions across 3 CDMX zones.
+"""Container definitions — distributed across CDMX alcaldías.
 
-Each container has a GPS coordinate, zone, and initial fill level.
+Container count is configurable via the NUM_CONTAINERS env var.
+Defaults to 50 for local dev (fast startup), but production uses
+10,000 across all 16 alcaldías weighted by population.
 """
 
-import random
+import os
 
-# Zone centers (approximate GPS coords in CDMX)
-ZONES = {
-    "centro": {"lat": 19.4326, "lon": -99.1332},
-    "norte": {"lat": 19.4890, "lon": -99.1250},
-    "sur": {"lat": 19.3600, "lon": -99.1560},
-}
-
-CONTAINERS_PER_ZONE = 17  # ~50 total
+from simulator.cdmx_data import generate_containers
 
 
-def _generate_containers() -> list[dict]:
-    containers = []
-    idx = 1
-    for zone_name, center in ZONES.items():
-        count = CONTAINERS_PER_ZONE if zone_name != "sur" else 16
-        for _ in range(count):
-            containers.append({
-                "id": f"CNT-{idx:03d}",
-                "latitude": round(center["lat"] + random.uniform(-0.02, 0.02), 6),
-                "longitude": round(center["lon"] + random.uniform(-0.02, 0.02), 6),
-                "zone": zone_name,
-                "fill_level": round(random.uniform(0.05, 0.65), 3),
-            })
-            idx += 1
-    return containers
+NUM_CONTAINERS = int(os.environ.get("NUM_CONTAINERS", "50"))
 
-
-CONTAINERS = _generate_containers()
+CONTAINERS: list[dict] = generate_containers(NUM_CONTAINERS)

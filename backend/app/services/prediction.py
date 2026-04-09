@@ -294,6 +294,51 @@ class FillLevelPredictor:
 
         return None
 
+    def predict_fill_trajectory_batch(
+        self,
+        histories: list[deque[HistoricalReading] | list[HistoricalReading]],
+    ) -> list[np.ndarray | None]:
+        """Batched version of predict_fill_trajectory.
+
+        Runs a single TTM forward pass over all eligible containers at once.
+        Returns a list of the same length as `histories`, with None for
+        entries that had insufficient data.
+        """
+        if self.model is None or settings.force_watsonx_forecast:
+            # Fallback: per-container path (watsonx or linear)
+            return [self.predict_fill_trajectory(h) for h in histories]
+
+        # Resample all histories; mark insufficient ones
+        series_list: list[list[float]] = []
+        valid_indices: list[int] = []
+        for i, hist in enumerate(histories):
+            series = _resample_to_15min(hist)
+            if len(series) >= MIN_CONTEXT_POINTS:
+                series_list.append(_pad_or_truncate(series, CONTEXT_LENGTH))
+                valid_indices.append(i)
+
+        results: list[np.ndarray | None] = [None] * len(histories)
+        if not series_list:
+            return results
+
+        # Build batch tensor: (batch, context, channels=1)
+        try:
+            batch_tensor = torch.tensor(
+                series_list, dtype=torch.float32,
+            ).unsqueeze(-1)  # shape (B, 512, 1)
+            with torch.no_grad():
+                output = self.model(batch_tensor)
+            # output.prediction_outputs shape: (B, 96, 1)
+            predictions = output.prediction_outputs[:, :, 0].numpy()
+            predictions = np.clip(predictions, 0.0, 1.0)
+            for batch_idx, orig_idx in enumerate(valid_indices):
+                results[orig_idx] = predictions[batch_idx]
+            return results
+        except Exception as e:
+            logger.warning("[Prediction] Batched TTM inference failed: %s", e)
+            # Fall back to per-container
+            return [self.predict_fill_trajectory(h) for h in histories]
+
     def predict(self, features: list[list[float]]) -> list[float]:
         """Legacy predict method. Kept for API compatibility."""
         if not self.is_trained:
@@ -314,7 +359,10 @@ predictor = FillLevelPredictor()
 # History management
 # ---------------------------------------------------------------------------
 
-MAX_HISTORY_PER_CONTAINER = 52000  # ~6 days at 10s intervals
+MAX_HISTORY_PER_CONTAINER = 1024  # 10.6 days at 15-min resample granularity
+
+# Threshold above which we switch to a lightweight seed (24h @ 30min instead of 144h @ 10min)
+LARGE_DEPLOYMENT_THRESHOLD = 500
 
 
 def _ensure_utc(ts: datetime) -> datetime:
@@ -363,11 +411,34 @@ def maybe_retrain() -> dict | None:
 
 
 def generate_seed_history(sensors_list: list[dict]) -> None:
-    """Generate 144h of synthetic history for all registered sensors."""
+    """Generate synthetic seed history for all registered sensors.
+
+    Switches to a lighter seed for large deployments (>500 sensors) to keep
+    memory bounded while still providing enough context for TTM inference.
+    """
     random.seed(42)
     now = datetime.now(timezone.utc)
-    start = now - timedelta(hours=144)
-    interval = timedelta(minutes=10)
+
+    n = len(sensors_list)
+    if n > LARGE_DEPLOYMENT_THRESHOLD:
+        # Lightweight seed: 24h @ 30-min intervals = 48 points per container
+        # With 10K sensors: 10K * 48 * ~100 bytes ≈ 48 MB
+        start = now - timedelta(hours=24)
+        interval = timedelta(minutes=30)
+        logger.info(
+            "[Prediction] Large deployment (%d sensors): generating lightweight seed (24h @ 30min)",
+            n,
+        )
+    else:
+        # Rich seed for small deployments: 144h @ 10-min intervals
+        start = now - timedelta(hours=144)
+        interval = timedelta(minutes=10)
+        logger.info(
+            "[Prediction] Small deployment (%d sensors): generating rich seed (144h @ 10min)",
+            n,
+        )
+
+    step_hours = interval.total_seconds() / 3600.0
 
     for info in sensors_list:
         cid = info["container_id"]
@@ -385,7 +456,7 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
             else:
                 rate_mult = 0.5
 
-            fill += base_rate * rate_mult * (10.0 / 60.0)
+            fill += base_rate * rate_mult * step_hours
             fill += random.gauss(0, 0.02)
             fill = max(0.0, min(1.0, fill))
 
@@ -417,36 +488,28 @@ def train_initial_model() -> dict:
 # ---------------------------------------------------------------------------
 
 
-def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
-    """Generate prediction for a single container."""
-    history = container_history.get(container_id)
-    if not history or len(history) < 2:
-        return None
-
+def _build_prediction_dict(
+    container_id: str,
+    history: deque[HistoricalReading] | list[HistoricalReading],
+    trajectory: np.ndarray | None,
+    threshold: float,
+) -> dict:
+    """Build the public prediction dict from a container's history + trajectory."""
     latest = history[-1]
-
-    if not predictor.is_trained:
-        return None
-
     fill_rate = _compute_fill_rate(latest, history)
 
-    # Try TTM R2 prediction
-    trajectory = predictor.predict_fill_trajectory(history)
     if trajectory is not None:
         predicted_24h = float(trajectory[-1])
     else:
-        # Fallback to linear extrapolation
         predicted_24h = max(0.0, min(1.0, latest.fill_level + fill_rate * 24))
 
-    # Estimate hours to full
     estimated_hours = None
     estimated_full_at = None
 
     if trajectory is not None:
-        # Use trajectory to find when fill crosses threshold
         for i, val in enumerate(trajectory):
             if val >= threshold:
-                estimated_hours = round((i + 1) * 0.25, 1)  # each step = 15min = 0.25h
+                estimated_hours = round((i + 1) * 0.25, 1)  # each step = 15min
                 estimated_full_at = (
                     datetime.now(timezone.utc) + timedelta(hours=estimated_hours)
                 ).isoformat()
@@ -460,17 +523,10 @@ def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
                 datetime.now(timezone.utc) + timedelta(hours=estimated_hours)
             ).isoformat()
 
-    # Confidence based on model+linear agreement
     if fill_rate > 0.001 and estimated_hours is not None:
         model_says_full = predicted_24h >= threshold
-        linear_says_full = (
-            fill_rate > 0 and
-            (threshold - latest.fill_level) / fill_rate <= 24
-        ) if fill_rate > 0.001 else False
-        if model_says_full == linear_says_full:
-            confidence = "high"
-        else:
-            confidence = "medium"
+        linear_says_full = (threshold - latest.fill_level) / fill_rate <= 24
+        confidence = "high" if model_says_full == linear_says_full else "medium"
     else:
         confidence = "low"
 
@@ -486,16 +542,46 @@ def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
     }
 
 
+def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
+    """Generate prediction for a single container."""
+    history = container_history.get(container_id)
+    if not history or len(history) < 2:
+        return None
+    if not predictor.is_trained:
+        return None
+
+    trajectory = predictor.predict_fill_trajectory(history)
+    return _build_prediction_dict(container_id, history, trajectory, threshold)
+
+
 def predict_all(zone: str | None = None, threshold: float = 0.8) -> list[dict]:
-    """Get predictions for all containers, optionally filtered by zone."""
-    results = []
-    for cid in container_history:
-        pred = predict_container(cid, threshold)
-        if pred is None:
+    """Get predictions for all containers, optionally filtered by zone.
+
+    Uses batched TTM inference: a single forward pass over all eligible
+    containers instead of N independent calls.
+    """
+    if not predictor.is_trained:
+        return []
+
+    # Collect eligible containers (optionally zone-filtered)
+    eligible: list[tuple[str, deque[HistoricalReading]]] = []
+    for cid, history in container_history.items():
+        if not history or len(history) < 2:
             continue
-        if zone and pred["zone"] != zone:
+        if zone and history[-1].zone != zone:
             continue
-        results.append(pred)
+        eligible.append((cid, history))
+
+    if not eligible:
+        return []
+
+    histories = [h for _, h in eligible]
+    trajectories = predictor.predict_fill_trajectory_batch(histories)
+
+    results = [
+        _build_prediction_dict(cid, hist, traj, threshold)
+        for (cid, hist), traj in zip(eligible, trajectories)
+    ]
 
     results.sort(key=lambda p: p["estimated_hours_to_full"] or float("inf"))
     return results
