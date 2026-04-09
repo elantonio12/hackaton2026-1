@@ -1,0 +1,100 @@
+<!-- Hero section with headline + dashboard mockup -->
+<section id="hero" class="min-h-screen pt-16 flex items-center bg-gradient-to-br from-white via-white to-green-50 relative overflow-hidden">
+  <!-- Decorative bg circles -->
+  <div class="absolute top-20 right-0 w-96 h-96 bg-eco-green/5 rounded-full blur-3xl -z-0"></div>
+  <div class="absolute bottom-0 left-0 w-72 h-72 bg-eco-green/8 rounded-full blur-2xl -z-0"></div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center relative z-10">
+    <!-- Text column -->
+    <div class="flex flex-col gap-6 fade-up">
+      <span class="inline-flex items-center gap-2 text-xs font-medium text-eco-green bg-green-50 border border-green-200 rounded-full px-3 py-1.5 w-fit">
+        Track IBM — Ciudades Resilientes | Hackathon Genius Arena 2026
+      </span>
+
+      <h1 class="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold leading-[1.1] text-eco-text-primary">
+        La Ciudad de Mexico genera
+        <span class="text-eco-green">12,700 toneladas</span>
+        de basura al dia.
+      </h1>
+      <p class="text-2xl sm:text-3xl font-semibold text-eco-text-secondary leading-snug">
+        El sistema para recogerla no ha cambiado en decadas.
+      </p>
+
+      <p class="text-lg text-eco-text-secondary max-w-xl">
+        EcoRuta usa sensores IoT, inteligencia artificial y optimizacion de rutas en tiempo real para transformar la recoleccion de residuos: menos kilometros, menos emisiones, mejor servicio.
+      </p>
+
+      <div class="flex flex-wrap gap-3">
+        <a href="/admin/dashboard" class="inline-flex items-center gap-2 bg-gradient-to-r from-eco-green to-eco-green-dark text-white font-semibold px-6 py-3 rounded-xl shadow-lg shadow-eco-green/25 hover:shadow-xl hover:shadow-eco-green/30 transition-all hover:-translate-y-0.5">
+          Ver demo en vivo
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </a>
+        <a href="#solucion" class="inline-flex items-center gap-2 border-2 border-eco-green text-eco-green font-semibold px-6 py-3 rounded-xl hover:bg-green-50 transition-colors">
+          Conocer la solucion
+        </a>
+      </div>
+
+      <div class="flex flex-wrap gap-4 sm:gap-6 text-sm text-eco-text-secondary mt-2">
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-eco-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          25% menos km recorridos
+        </span>
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-eco-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          129 kg CO2 evitados/dia
+        </span>
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-eco-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          &lt; 5s para generar ruta
+        </span>
+      </div>
+    </div>
+
+    <!-- Dashboard mockup -->
+    <div class="relative hidden lg:block fade-up" style="animation-delay:.2s">
+      <div class="relative bg-eco-bg-panel rounded-2xl shadow-2xl border border-eco-border p-4 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+        <div class="bg-eco-bg rounded-xl p-5 flex flex-col gap-4">
+          <!-- Window bar -->
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-eco-danger"></span>
+            <span class="w-3 h-3 rounded-full bg-eco-warning"></span>
+            <span class="w-3 h-3 rounded-full bg-eco-green"></span>
+            <span class="ml-2 text-xs text-eco-text-secondary">EcoRuta Dashboard — CDMX</span>
+          </div>
+          <!-- Mini metrics -->
+          <div class="grid grid-cols-4 gap-2">
+            <div class="bg-white rounded-lg p-3 text-center">
+              <span class="block text-xl font-bold text-eco-text-primary">50</span>
+              <span class="text-[10px] text-eco-text-secondary">Contenedores</span>
+            </div>
+            <div class="bg-white rounded-lg p-3 text-center">
+              <span class="block text-xl font-bold text-eco-danger">8</span>
+              <span class="text-[10px] text-eco-text-secondary">Criticos</span>
+            </div>
+            <div class="bg-white rounded-lg p-3 text-center">
+              <span class="block text-xl font-bold text-eco-warning">12</span>
+              <span class="text-[10px] text-eco-text-secondary">Llenos 24h</span>
+            </div>
+            <div class="bg-white rounded-lg p-3 text-center">
+              <span class="block text-xl font-bold text-eco-green">6</span>
+              <span class="text-[10px] text-eco-text-secondary">Recolectores</span>
+            </div>
+          </div>
+          <!-- Fake map -->
+          <div class="bg-green-50 rounded-lg h-48 flex items-center justify-center relative overflow-hidden">
+            <svg class="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 200 120">
+              <circle cx="60" cy="45" r="4" fill="#16a34a"/><circle cx="90" cy="30" r="4" fill="#ef4444"/>
+              <circle cx="120" cy="60" r="4" fill="#f59e0b"/><circle cx="75" cy="80" r="4" fill="#16a34a"/>
+              <circle cx="140" cy="75" r="4" fill="#ef4444"/><circle cx="50" cy="70" r="4" fill="#16a34a"/>
+              <circle cx="160" cy="40" r="4" fill="#f59e0b"/><circle cx="100" cy="90" r="4" fill="#16a34a"/>
+            </svg>
+            <span class="text-sm text-eco-green font-medium z-10">Mapa CDMX — 3 zonas</span>
+          </div>
+        </div>
+      </div>
+      <!-- Glow -->
+      <div class="absolute -top-8 -right-8 w-32 h-32 bg-eco-green/10 rounded-full blur-2xl"></div>
+      <div class="absolute -bottom-6 -left-6 w-24 h-24 bg-eco-green/15 rounded-full blur-xl"></div>
+    </div>
+  </div>
+</section>

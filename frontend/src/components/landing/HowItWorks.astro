@@ -1,0 +1,103 @@
+<!-- How it works: system flow + citizen/municipality flows -->
+<section id="como-funciona" class="py-20 bg-green-50/30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="text-center max-w-3xl mx-auto mb-14 fade-up">
+      <h2 class="text-3xl sm:text-4xl font-bold text-eco-text-primary mb-4">
+        Como funciona EcoRuta
+      </h2>
+    </div>
+
+    <!-- System flow: 4 steps -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+      <!-- Step 1 -->
+      <div class="relative flex flex-col items-center text-center fade-up">
+        <div class="w-14 h-14 bg-eco-green text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-eco-green/20">1</div>
+        <h3 class="font-semibold text-eco-text-primary mb-2">Captura</h3>
+        <p class="text-sm text-eco-text-secondary">Sensores IoT y reportes ciudadanos alimentan datos continuos de cada contenedor.</p>
+        <!-- Arrow (hidden on mobile, shown lg) -->
+        <div class="hidden lg:block absolute top-7 -right-3 text-eco-green/40">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="relative flex flex-col items-center text-center fade-up" style="animation-delay:.1s">
+        <div class="w-14 h-14 bg-eco-green text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-eco-green/20">2</div>
+        <h3 class="font-semibold text-eco-text-primary mb-2">Procesamiento</h3>
+        <p class="text-sm text-eco-text-secondary">IBM Watsonx y PostgreSQL con PostGIS procesan y almacenan datos geoespaciales en la nube.</p>
+        <div class="hidden lg:block absolute top-7 -right-3 text-eco-green/40">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="relative flex flex-col items-center text-center fade-up" style="animation-delay:.2s">
+        <div class="w-14 h-14 bg-eco-green text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-eco-green/20">3</div>
+        <h3 class="font-semibold text-eco-text-primary mb-2">Optimizacion</h3>
+        <p class="text-sm text-eco-text-secondary">El motor de IA calcula rutas optimas y predice llenado futuro con machine learning.</p>
+        <div class="hidden lg:block absolute top-7 -right-3 text-eco-green/40">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="flex flex-col items-center text-center fade-up" style="animation-delay:.3s">
+        <div class="w-14 h-14 bg-eco-green text-white rounded-full flex items-center justify-center text-lg font-bold mb-4 shadow-lg shadow-eco-green/20">4</div>
+        <h3 class="font-semibold text-eco-text-primary mb-2">Accion</h3>
+        <p class="text-sm text-eco-text-secondary">Conductores reciben instrucciones claras. Gestores ven metricas en el dashboard. Ciudadanos reciben alertas.</p>
+      </div>
+    </div>
+
+    <!-- Parallel flows: citizen + municipality -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+      <!-- Citizen flow -->
+      <div class="bg-white border border-blue-200 rounded-xl p-6 sm:p-8 fade-up">
+        <h3 class="font-semibold text-eco-text-primary mb-5 flex items-center gap-2">
+          <svg class="w-5 h-5 text-eco-info" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+          </svg>
+          Para el ciudadano
+        </h3>
+        <ol class="space-y-4">
+          <li class="flex items-start gap-3">
+            <span class="w-7 h-7 bg-blue-50 text-eco-info rounded-full flex items-center justify-center text-sm font-bold shrink-0">1</span>
+            <span class="text-sm text-eco-text-secondary">Descarga la app (PWA, sin app store)</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-7 h-7 bg-blue-50 text-eco-info rounded-full flex items-center justify-center text-sm font-bold shrink-0">2</span>
+            <span class="text-sm text-eco-text-secondary">Reporta contenedores desbordados o anomalias desde su celular</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-7 h-7 bg-blue-50 text-eco-info rounded-full flex items-center justify-center text-sm font-bold shrink-0">3</span>
+            <span class="text-sm text-eco-text-secondary">Recibe notificaciones sobre el servicio en su colonia</span>
+          </li>
+        </ol>
+      </div>
+
+      <!-- Municipality flow -->
+      <div class="bg-white border border-green-200 rounded-xl p-6 sm:p-8 fade-up" style="animation-delay:.1s">
+        <h3 class="font-semibold text-eco-text-primary mb-5 flex items-center gap-2">
+          <svg class="w-5 h-5 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z"/>
+          </svg>
+          Para el municipio
+        </h3>
+        <ol class="space-y-4">
+          <li class="flex items-start gap-3">
+            <span class="w-7 h-7 bg-green-50 text-eco-green rounded-full flex items-center justify-center text-sm font-bold shrink-0">1</span>
+            <span class="text-sm text-eco-text-secondary">Los sensores detectan contenedores criticos automaticamente</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-7 h-7 bg-green-50 text-eco-green rounded-full flex items-center justify-center text-sm font-bold shrink-0">2</span>
+            <span class="text-sm text-eco-text-secondary">El sistema genera rutas optimizadas y las asigna a conductores</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-7 h-7 bg-green-50 text-eco-green rounded-full flex items-center justify-center text-sm font-bold shrink-0">3</span>
+            <span class="text-sm text-eco-text-secondary">Al final del turno, se genera un reporte de eficiencia automatico</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,87 @@
+<!-- Problem section: 3 stat cards + before/after comparison -->
+<section id="problema" class="py-20 bg-white">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <!-- Header -->
+    <div class="text-center max-w-3xl mx-auto mb-14 fade-up">
+      <h2 class="text-3xl sm:text-4xl font-bold text-eco-text-primary mb-4">
+        Un sistema de recoleccion disenado para otra epoca
+      </h2>
+      <p class="text-lg text-eco-text-secondary">
+        Las rutas se planifican con semanas de anticipacion, sin datos reales. Los camiones recorren rutas completas aunque los contenedores esten al 30% de capacidad.
+      </p>
+    </div>
+
+    <!-- 3 stat cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-14">
+      <!-- Card 1: basura -->
+      <div class="bg-white border border-eco-border rounded-xl p-6 text-center fade-up shadow-sm hover:shadow-md transition-shadow">
+        <div class="w-12 h-12 mx-auto mb-4 bg-green-50 rounded-xl flex items-center justify-center">
+          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+          </svg>
+        </div>
+        <span class="block text-4xl font-bold text-eco-green mb-1">12,700 ton</span>
+        <span class="text-sm text-eco-text-secondary">de basura generada al dia en CDMX</span>
+        <span class="block text-xs text-eco-text-secondary mt-2 italic">Fuente: SEDEMA</span>
+      </div>
+
+      <!-- Card 2: inversion -->
+      <div class="bg-white border border-eco-border rounded-xl p-6 text-center fade-up shadow-sm hover:shadow-md transition-shadow" style="animation-delay:.1s">
+        <div class="w-12 h-12 mx-auto mb-4 bg-green-50 rounded-xl flex items-center justify-center">
+          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"/>
+          </svg>
+        </div>
+        <span class="block text-4xl font-bold text-eco-green mb-1">$500 MDP</span>
+        <span class="text-sm text-eco-text-secondary">invertidos en vehiculos e infraestructura (2025-2026)</span>
+        <span class="block text-xs text-eco-text-secondary mt-2 italic">Fuente: Expansion</span>
+      </div>
+
+      <!-- Card 3: datos -->
+      <div class="bg-white border border-eco-border rounded-xl p-6 text-center fade-up shadow-sm hover:shadow-md transition-shadow" style="animation-delay:.2s">
+        <div class="w-12 h-12 mx-auto mb-4 bg-green-50 rounded-xl flex items-center justify-center">
+          <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z"/>
+          </svg>
+        </div>
+        <span class="block text-4xl font-bold text-eco-green mb-1">0 datos</span>
+        <span class="text-sm text-eco-text-secondary">en tiempo real sobre el estado de los contenedores</span>
+        <span class="block text-xs text-eco-text-secondary mt-2 italic">Fuente: INECC</span>
+      </div>
+    </div>
+
+    <!-- Context paragraph -->
+    <p class="text-center text-eco-text-secondary max-w-3xl mx-auto mb-14 fade-up">
+      El resultado: costos innecesarios, emisiones evitables, contenedores desbordados y ciudadanos insatisfechos. Mientras el transporte de personas ya se transformo con Uber, Waze y Google Maps, la recoleccion de basura sigue operando con rutas fijas y horarios rigidos.
+    </p>
+
+    <!-- Before / After -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-0 rounded-xl overflow-hidden border border-eco-border max-w-4xl mx-auto fade-up">
+      <div class="bg-red-50 p-6 sm:p-8">
+        <h3 class="font-semibold text-eco-text-primary mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-eco-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          Hoy
+        </h3>
+        <ul class="space-y-3 text-sm text-eco-text-secondary">
+          <li class="flex items-start gap-2"><span class="text-eco-danger font-bold">x</span> Rutas fijas y estaticas</li>
+          <li class="flex items-start gap-2"><span class="text-eco-danger font-bold">x</span> Sin informacion de contenedores</li>
+          <li class="flex items-start gap-2"><span class="text-eco-danger font-bold">x</span> Decisiones manuales por intuicion</li>
+          <li class="flex items-start gap-2"><span class="text-eco-danger font-bold">x</span> Impacto ambiental no medido</li>
+        </ul>
+      </div>
+      <div class="bg-green-50 p-6 sm:p-8">
+        <h3 class="font-semibold text-eco-text-primary mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          Con EcoRuta
+        </h3>
+        <ul class="space-y-3 text-sm text-eco-text-secondary">
+          <li class="flex items-start gap-2"><svg class="w-4 h-4 text-eco-green shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Rutas dinamicas en tiempo real</li>
+          <li class="flex items-start gap-2"><svg class="w-4 h-4 text-eco-green shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Datos continuos via IoT</li>
+          <li class="flex items-start gap-2"><svg class="w-4 h-4 text-eco-green shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Decisiones automatizadas con IA</li>
+          <li class="flex items-start gap-2"><svg class="w-4 h-4 text-eco-green shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Reduccion medible de CO2 y combustible</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
