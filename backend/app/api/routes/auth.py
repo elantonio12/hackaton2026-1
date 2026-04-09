@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 
 from app.core.config import settings
+from app.services.email import send_verification_email
 
 router = APIRouter()
 security = HTTPBearer()
@@ -19,7 +20,7 @@ security = HTTPBearer()
 
 class GoogleLoginRequest(BaseModel):
     """Body that the frontend sends after Google Sign-In."""
-    token: str  # Google ID-token (credential from Google Sign-In)
+    token: str
 
 
 class RegisterRequest(BaseModel):
@@ -53,7 +54,6 @@ class UserInfo(BaseModel):
 # ---------------------------------------------------------------------------
 
 users_db: dict[str, dict] = {}
-# Secondary index: email -> sub (for email/password lookups)
 email_to_sub: dict[str, str] = {}
 
 # ---------------------------------------------------------------------------
@@ -71,8 +71,9 @@ def _verify_password(password: str, hashed: str) -> bool:
 # JWT helpers
 # ---------------------------------------------------------------------------
 
-def _create_jwt(data: dict) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expiration_minutes)
+def _create_jwt(data: dict, expires_minutes: int | None = None) -> str:
+    exp = expires_minutes or settings.jwt_expiration_minutes
+    expire = datetime.now(timezone.utc) + timedelta(minutes=exp)
     payload = {**data, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
@@ -104,16 +105,15 @@ async def get_current_user(
 # Email/Password endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/register", response_model=TokenResponse)
+@router.post("/register")
 async def register(body: RegisterRequest):
-    """Register a new user with email and password."""
+    """Register a new user. Sends verification email if Resend is configured."""
     if body.email.lower() in email_to_sub:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe una cuenta con este correo electrónico",
         )
 
-    # Generate a deterministic sub from email for the in-memory store
     sub = f"local|{body.email.lower()}"
     now = datetime.now(timezone.utc).isoformat()
 
@@ -124,17 +124,62 @@ async def register(body: RegisterRequest):
         "picture": None,
         "role": "citizen",
         "provider": "email",
+        "email_verified": False,
         "password_hash": _hash_password(body.password),
         "created_at": now,
         "last_login": now,
     }
     email_to_sub[body.email.lower()] = sub
 
-    access_token = _create_jwt({"sub": sub, "email": body.email.lower()})
+    # Send verification email
+    verification_token = _create_jwt(
+        {"sub": sub, "purpose": "email_verification"},
+        expires_minutes=60 * 24,  # 24 hours
+    )
+    verification_url = f"{settings.frontend_url}/auth/verified?token={verification_token}"
+    email_sent = send_verification_email(body.email, body.name, verification_url)
 
-    # Return user without password_hash
+    if email_sent:
+        return {
+            "status": "verification_pending",
+            "message": "Se envió un correo de verificación. Revisa tu bandeja de entrada.",
+            "email": body.email.lower(),
+        }
+
+    # Fallback: if email service is not configured, auto-verify and return token
+    users_db[sub]["email_verified"] = True
+    access_token = _create_jwt({"sub": sub, "email": body.email.lower()})
     user_public = {k: v for k, v in users_db[sub].items() if k != "password_hash"}
     return TokenResponse(access_token=access_token, user=user_public)
+
+
+@router.get("/verify-email")
+async def verify_email(token: str = Query(...)):
+    """Verify a user's email from the link sent to their inbox."""
+    payload = _decode_jwt(token)
+
+    if payload.get("purpose") != "email_verification":
+        raise HTTPException(status_code=400, detail="Token inválido")
+
+    sub = payload.get("sub")
+    user = users_db.get(sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if user.get("email_verified"):
+        return {"status": "already_verified", "message": "Esta cuenta ya fue verificada."}
+
+    user["email_verified"] = True
+    access_token = _create_jwt({"sub": sub, "email": user["email"]})
+
+    user_public = {k: v for k, v in user.items() if k != "password_hash"}
+    return {
+        "status": "verified",
+        "message": "¡Cuenta verificada exitosamente!",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user_public,
+    }
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -159,6 +204,12 @@ async def login(body: LoginRequest):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos",
+        )
+
+    if not user.get("email_verified", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cuenta no verificada. Revisa tu correo electrónico.",
         )
 
     user["last_login"] = datetime.now(timezone.utc).isoformat()
@@ -198,6 +249,7 @@ async def google_login(body: GoogleLoginRequest):
             "picture": idinfo.get("picture"),
             "role": "citizen",
             "provider": "google",
+            "email_verified": True,  # Google accounts are pre-verified
             "created_at": now,
         }
         if email:
