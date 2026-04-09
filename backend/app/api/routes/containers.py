@@ -3,9 +3,15 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
+from app.core.cache import ttl_cache
+from app.db.database import async_session, get_db
 from app.db.models import ContainerReading
 from app.models.schemas import ContainerReading as ContainerReadingSchema
+
+# /readings is hit by every open admin tab every 30s and returns ~1.5 MB
+# of JSON over 10K rows. With this TTL, concurrent admins collapse into
+# a single Postgres query per window.
+READINGS_CACHE_TTL = 25.0
 
 router = APIRouter()
 
@@ -61,9 +67,24 @@ async def receive_bulk_readings(
 
 
 @router.get("/readings", response_model=list[ContainerReadingSchema])
-async def get_all_readings(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(ContainerReading))
-    return [r.to_dict() for r in result.scalars().all()]
+async def get_all_readings():
+    """Cached list of every container reading.
+
+    No `db: AsyncSession = Depends(get_db)` parameter on purpose: when
+    we hit the cache (the common case) we don't want FastAPI to even
+    open a DB session. The loader opens its own session via
+    `async_session()` only on a real cache miss.
+    """
+    async def _load() -> list[dict]:
+        async with async_session() as db:
+            result = await db.execute(select(ContainerReading))
+            return [r.to_dict() for r in result.scalars().all()]
+
+    return await ttl_cache.get_or_set(
+        key="containers:readings:all",
+        ttl=READINGS_CACHE_TTL,
+        loader=_load,
+    )
 
 
 @router.get("/readings/{container_id}", response_model=ContainerReadingSchema)

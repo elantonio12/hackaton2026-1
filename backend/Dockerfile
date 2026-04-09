@@ -19,4 +19,10 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Multi-worker uvicorn: each worker is a separate Python process,
+# bypassing the GIL so HTTP requests, DB queries, and DB-writing
+# background tasks can run truly in parallel. Override at runtime
+# with -e UVICORN_WORKERS=N if needed (e.g. low-RAM VPS → 1).
+ENV UVICORN_WORKERS=2
+
+CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS}

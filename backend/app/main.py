@@ -75,6 +75,13 @@ async def startup():
     asyncio.create_task(snapshot_loop())
 
 
+@app.on_event("shutdown")
+async def shutdown():
+    """Tear down the process/thread pools so workers exit cleanly."""
+    from app.core.executors import shutdown_executors
+    shutdown_executors()
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}

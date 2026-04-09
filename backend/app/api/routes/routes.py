@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.auth import require_collector_or_admin
+from app.core.executors import run_in_process
 from app.db.database import get_db
 from app.db.models import ContainerReading, Route, Truck, User
 from app.models.schemas import OptimizeAllResponse
@@ -97,7 +98,13 @@ async def optimize_routes_endpoint(
     ]
 
     try:
-        solutions = vrp_solver.solve(truck_inputs, container_inputs)
+        # Offload to ProcessPoolExecutor — OR-Tools is CPU-bound and would
+        # otherwise block the asyncio event loop for ~5s, freezing every
+        # other in-flight HTTP request. The child process re-uses
+        # OSRM (HTTP) so it doesn't need any of our DB/in-memory state.
+        solutions = await run_in_process(
+            vrp_solver.solve, truck_inputs, container_inputs
+        )
     except Exception as exc:
         logger.exception("[routes] VRP solver failed")
         raise HTTPException(

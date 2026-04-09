@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.executors import run_in_thread
 from app.db.models import Collector, ContainerReading, Route, Sensor, Truck
 from app.models.schemas import ContainerReading as ContainerReadingSchema
 from app.services.prediction import (
@@ -117,7 +118,9 @@ async def compute_metrics(
 
     predicted_full_24h = 0
     if predictor.is_trained:
-        preds = predict_all(threshold=fill_threshold)
+        # Offload to thread pool: TTM inference is CPU-bound but
+        # GIL-releasing, so the asyncio loop stays responsive.
+        preds = await run_in_thread(predict_all, threshold=fill_threshold)
         predicted_full_24h = sum(
             1 for p in preds
             if p.get("estimated_hours_to_full") is not None

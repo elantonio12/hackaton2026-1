@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.routes.auth import require_admin
+from app.core.executors import run_in_thread
 from app.db.models import User
 from app.models.schemas import ContainerPrediction, ModelStatus, PredictionResponse
 from app.services.prediction import (
@@ -23,7 +24,10 @@ async def get_all_predictions(zone: str | None = None, threshold: float = 0.8):
     if not predictor.is_trained:
         raise HTTPException(status_code=503, detail="Modelo no entrenado aún")
 
-    predictions = predict_all(zone=zone, threshold=threshold)
+    # Run in the thread pool — TTM batched inference is CPU-bound but
+    # numpy/torch release the GIL during the heavy work, so this still
+    # frees the asyncio loop while ~10K predictions cook.
+    predictions = await run_in_thread(predict_all, zone=zone, threshold=threshold)
     return PredictionResponse(
         predictions=[ContainerPrediction(**p) for p in predictions],
         model_trained=predictor.is_trained,

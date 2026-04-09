@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.auth import _hash_password, get_current_user, require_admin
 from app.api.routes.sensors import verify_sensor_token
-from app.db.database import get_db
+from app.core.cache import ttl_cache
+from app.db.database import async_session, get_db
 from app.db.models import ContainerReading, Route, Truck, User
 from app.models.schemas import (
     ActiveRouteOut,
@@ -42,17 +43,24 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 @router.get("/", response_model=list[TruckOut])
-async def list_trucks(
-    zone: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-):
-    """List all trucks. Optionally filter by zone."""
-    stmt = select(Truck)
-    if zone:
-        stmt = stmt.where(Truck.zone == zone)
-    result = await db.execute(stmt)
-    trucks = result.scalars().all()
-    return [_truck_payload(t) for t in trucks]
+async def list_trucks(zone: Optional[str] = None):
+    """List all trucks. Optionally filter by zone.
+
+    Cached with a 5s TTL: this endpoint is polled every 5s by every
+    open admin and recolector tab. With the cache, N concurrent
+    pollers collapse to a single Postgres query per window.
+    """
+    cache_key = f"trucks:list:{zone or '__all__'}"
+
+    async def _load() -> list[dict]:
+        async with async_session() as db:
+            stmt = select(Truck)
+            if zone:
+                stmt = stmt.where(Truck.zone == zone)
+            result = await db.execute(stmt)
+            return [_truck_payload(t) for t in result.scalars().all()]
+
+    return await ttl_cache.get_or_set(key=cache_key, ttl=4.0, loader=_load)
 
 
 @router.get("/me/route", response_model=ActiveRouteOut)
