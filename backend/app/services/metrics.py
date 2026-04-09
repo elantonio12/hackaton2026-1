@@ -10,12 +10,17 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Collector, ContainerReading, Route, Sensor, Truck
+from app.db.models import (
+    Collector,
+    ContainerReading,
+    PredictionSnapshot,
+    Route,
+    Sensor,
+    Truck,
+)
 from app.models.schemas import ContainerReading as ContainerReadingSchema
-from app.services import ml_client
 from app.services.prediction import (
     container_history,
-    predict_all,
     predictor,
     _compute_fill_rate,
 )
@@ -116,14 +121,19 @@ async def compute_metrics(
     # --- System status ---
     critical = [r for r in readings if r.fill_level >= fill_threshold]
 
+    # Read predictions from the latest background snapshot instead of
+    # re-running predict_all on every metrics request. The
+    # prediction_snapshot loop refreshes this row every 60s.
     predicted_full_24h = 0
-    # Probe ml-service liveness; cached internally so the cost is ~free
-    if await ml_client.is_ready():
-        # predict_all is now async and POSTs to ml-service over HTTP —
-        # the asyncio loop stays free during the round-trip.
-        preds = await predict_all(threshold=fill_threshold)
+    snap_q = await db.execute(
+        select(PredictionSnapshot)
+        .order_by(PredictionSnapshot.id.desc())
+        .limit(1)
+    )
+    latest_snap = snap_q.scalar_one_or_none()
+    if latest_snap is not None and latest_snap.predictions_json:
         predicted_full_24h = sum(
-            1 for p in preds
+            1 for p in latest_snap.predictions_json
             if p.get("estimated_hours_to_full") is not None
             and p["estimated_hours_to_full"] <= 24
         )

@@ -154,6 +154,42 @@ class Truck(Base):
         return d
 
 
+class PredictionSnapshot(Base):
+    """Background-computed snapshot of all container predictions.
+
+    The /predictions/ endpoint used to call predict_all() on every
+    request — that meant N concurrent admins triggered N TTM forward
+    passes per polling window AND the response jittered between calls
+    because the simulator updates fill_levels in the background.
+
+    Now a single async loop computes the snapshot every 60s, writes
+    one row here, and the API serves the latest row from a tiny TTL
+    cache. Workers read the same blob, so responses are stable inside
+    the refresh window.
+
+    The blob shape matches the public PredictionResponse:
+        [{container_id, zone, current_fill_level, predicted_fill_24h,
+          estimated_hours_to_full, estimated_full_at,
+          fill_rate_per_hour, confidence}, ...]
+    """
+
+    __tablename__ = "prediction_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    container_count: Mapped[int] = mapped_column(Integer, default=0)
+    elapsed_ms: Mapped[float] = mapped_column(Float, default=0.0)
+    predictions_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    def to_dict(self) -> dict:
+        d = {c.key: getattr(self, c.key) for c in self.__table__.columns}
+        if isinstance(d.get("timestamp"), datetime):
+            d["timestamp"] = d["timestamp"].isoformat()
+        return d
+
+
 class MetricSnapshot(Base):
     """Hourly snapshot of system-wide KPIs.
 

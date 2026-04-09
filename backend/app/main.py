@@ -72,8 +72,16 @@ async def startup():
     # writes one MetricSnapshot row every 5 minutes so /metrics/history
     # has time-series data for the admin charts. Survives restarts because
     # it persists to Postgres, not in-memory.
-    from app.services.metrics_snapshot import snapshot_loop
-    asyncio.create_task(snapshot_loop())
+    from app.services.metrics_snapshot import snapshot_loop as metrics_snapshot_loop
+    asyncio.create_task(metrics_snapshot_loop())
+
+    # 7. Start the prediction snapshot loop. Computes predict_all() once
+    # per minute in the background and persists the blob so /predictions/
+    # serves a stable, cached answer instead of triggering an ml-service
+    # round-trip on every poll. Same leader-election pattern as #6 so
+    # only one uvicorn worker actually runs the loop.
+    from app.services.prediction_snapshot import snapshot_loop as prediction_snapshot_loop
+    asyncio.create_task(prediction_snapshot_loop())
 
 
 @app.on_event("shutdown")

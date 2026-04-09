@@ -161,6 +161,8 @@ import { adminNav } from '../../lib/nav';
    * weight. The point is to render the same design tokens as the rest
    * of the dashboard and stay snappy on the 10K-container payload.
    */
+  import { formatHoursToFull } from '../../lib/format';
+
   const API = window.__API__;
 
   // ── Helpers ───────────────────────────────────────────────────────
@@ -389,10 +391,11 @@ import { adminNav } from '../../lib/nav';
         const color = i < 6 ? 'bg-eco-danger'
                     : i < 12 ? 'bg-eco-warning'
                     : 'bg-eco-info';
+        const rangeLabel = `${formatHoursToFull(i)}–${formatHoursToFull(i + 1)}`;
         return `
           <div class="flex-1 flex flex-col items-center justify-end gap-0.5 group min-w-0">
             <span class="text-[9px] text-eco-text-secondary opacity-0 group-hover:opacity-100">${count}</span>
-            <div class="w-full ${color} rounded-t" style="height:${heightPct}%" title="${i}h: ${count} contenedores"></div>
+            <div class="w-full ${color} rounded-t" style="height:${heightPct}%" title="${rangeLabel}: ${count} contenedores"></div>
             ${i % 4 === 0 ? `<span class="text-[9px] text-eco-text-secondary">${i}h</span>` : '<span class="text-[9px] opacity-0">·</span>'}
           </div>`;
       }).join('');
