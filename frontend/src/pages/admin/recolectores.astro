@@ -1,54 +1,55 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import '../../styles/auth.css';
+import AppHeader from '../../components/AppHeader.astro';
+import { adminNav } from '../../lib/nav';
 ---
 
-<Layout title="Gestionar Usuarios">
-  <main class="auth-main py-8">
-    <div class="auth-card max-w-lg">
-      <div class="auth-header">
-        <h1 class="auth-title">Invitar Usuario</h1>
-        <p class="auth-subtitle">Crea cuentas para recolectores y administradores</p>
-      </div>
+<Layout title="Invitar Usuario">
+  <div class="h-app overflow-y-auto bg-eco-bg">
+    <AppHeader title="Invitar usuario" nav={adminNav} />
 
-      <div id="error-banner" class="auth-error" style="display: none;"></div>
-
-      <div id="success-banner" class="alert alert-success mb-4 text-left" style="display: none;">
-        <p class="font-semibold mb-1">Usuario creado exitosamente</p>
-        <p class="text-sm mb-0.5">Correo: <strong id="created-email"></strong></p>
-        <p class="text-sm">Contrasena temporal: <strong id="created-password" class="font-mono bg-eco-green/10 px-1.5 py-0.5 rounded"></strong></p>
-        <p class="text-xs mt-2 opacity-80">Comparte estas credenciales con el usuario.</p>
-      </div>
-
-      <form id="invite-form" class="auth-form">
-        <div class="auth-form-group">
-          <label for="name" class="auth-label">Nombre Completo</label>
-          <input type="text" id="name" class="auth-input" placeholder="Juan Perez" required />
+    <main class="max-w-lg mx-auto px-4 py-6">
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6 flex flex-col gap-5">
+        <div>
+          <h1 class="text-xl font-semibold text-eco-text-primary">Invitar usuario</h1>
+          <p class="text-sm text-eco-text-secondary mt-1">Crea cuentas para recolectores y administradores</p>
         </div>
 
-        <div class="auth-form-group">
-          <label for="email" class="auth-label">Correo Electronico</label>
-          <input type="email" id="email" class="auth-input" placeholder="usuario@correo.com" required />
+        <div id="error-banner" class="alert alert-error" style="display: none;"></div>
+
+        <div id="success-banner" class="alert alert-success text-left" style="display: none;">
+          <p class="font-semibold mb-1">Usuario creado exitosamente</p>
+          <p class="text-sm mb-0.5">Correo: <strong id="created-email"></strong></p>
+          <p class="text-sm">Contrasena temporal: <strong id="created-password" class="font-mono bg-eco-green/10 px-1.5 py-0.5 rounded"></strong></p>
+          <p class="text-xs mt-2 opacity-80">Comparte estas credenciales con el usuario.</p>
         </div>
 
-        <div class="auth-form-group">
-          <label for="role" class="auth-label">Rol</label>
-          <select id="role" class="auth-input" required>
-            <option value="collector">Recolector</option>
-            <option value="admin">Administrador</option>
-          </select>
-        </div>
+        <form id="invite-form" class="flex flex-col gap-4">
+          <div>
+            <label for="name" class="block text-sm font-medium text-eco-text-primary mb-1.5">Nombre completo</label>
+            <input type="text" id="name" class="input" placeholder="Juan Perez" required />
+          </div>
 
-        <button type="submit" class="auth-button" id="submit-btn">
-          Crear Usuario
-        </button>
-      </form>
+          <div>
+            <label for="email" class="block text-sm font-medium text-eco-text-primary mb-1.5">Correo electronico</label>
+            <input type="email" id="email" class="input" placeholder="usuario@correo.com" required />
+          </div>
 
-      <div style="margin-top: 1.5rem; text-align: center;">
-        <a href="/admin" class="auth-link" style="font-size: 0.875rem;">Volver al Dashboard</a>
+          <div>
+            <label for="role" class="block text-sm font-medium text-eco-text-primary mb-1.5">Rol</label>
+            <select id="role" class="input" required>
+              <option value="collector">Recolector</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-full mt-2" id="submit-btn">
+            Crear usuario
+          </button>
+        </form>
       </div>
-    </div>
-  </main>
+    </main>
+  </div>
 </Layout>
 
 <script>

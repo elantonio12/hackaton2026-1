@@ -1,29 +1,20 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import AppHeader from '../../components/AppHeader.astro';
 import MapView from '../../components/MapView.astro';
+import { collectorNav } from '../../lib/nav';
 ---
 
 <Layout title="Mapa de Ruta">
   <div class="h-app flex flex-col bg-eco-bg">
+    <AppHeader title="Mapa" nav={collectorNav} backHref="/recolector/ruta" />
 
-    <!-- Header -->
-    <header class="sticky top-0 z-20 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <a href="/recolector/ruta" class="text-eco-text-secondary hover:text-eco-text-primary">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
-          </svg>
-        </a>
-        <span class="font-medium text-eco-text-primary text-base">Mapa de Ruta</span>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="flex gap-2 text-xs text-eco-text-secondary">
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-danger inline-block"></span>+80%</span>
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-warning inline-block"></span>50-80%</span>
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-green inline-block"></span>&lt;50%</span>
-        </div>
-      </div>
-    </header>
+    <!-- Legend -->
+    <div class="px-4 py-2 border-b border-eco-border bg-eco-bg-panel flex items-center gap-3 text-xs text-eco-text-secondary">
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-danger inline-block"></span>+80%</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-warning inline-block"></span>50-80%</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-green inline-block"></span>&lt;50%</span>
+    </div>
 
     <!-- Map fills remaining space -->
     <MapView id="map" height="flex-1" />

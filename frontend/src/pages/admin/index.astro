@@ -1,75 +1,96 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import AppHeader from '../../components/AppHeader.astro';
 import MapView from '../../components/MapView.astro';
-import StatCard from '../../components/StatCard.astro';
 import CriticalList from '../../components/CriticalList.astro';
 import RouteList from '../../components/RouteList.astro';
 import ReportList from '../../components/ReportList.astro';
+import { adminNav } from '../../lib/nav';
 ---
 
 <Layout title="Dashboard">
   <div class="h-app overflow-y-auto bg-eco-bg">
+    <AppHeader title="Dashboard" nav={adminNav} />
 
-    <!-- Header -->
-    <header class="sticky top-0 z-10 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
-        </svg>
-        <span class="font-medium text-eco-text-primary text-base">EcoRuta</span>
-        <span class="text-xs text-eco-text-secondary hidden sm:inline">— Panel de administración</span>
-      </div>
-      <div class="flex items-center gap-2">
-        <span id="live-dot" class="w-2 h-2 rounded-full bg-eco-green animate-pulse"></span>
-        <span class="text-xs text-eco-text-secondary">En vivo</span>
-      </div>
-    </header>
+    <main class="max-w-6xl mx-auto px-4 py-5 flex flex-col gap-5">
 
-    <main class="max-w-5xl mx-auto px-4 py-5 flex flex-col gap-5">
-
-      <!-- Métricas -->
+      <!-- Metricas fila 1: sistema -->
       <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          label="Total contenedores"
-          value="50"
-          sub="3 zonas CDMX"
-        />
-        <StatCard
-          id="stat-critical"
-          label="Críticos (+80%)"
-          value="—"
-          sub="Requieren atención"
-          color="danger"
-        />
-        <StatCard
-          label="Zonas activas"
-          value="3"
-          sub="Centro · Norte · Sur"
-          color="success"
-        />
-        <StatCard
-          id="stat-reports"
-          label="Reportes ciudadanos"
-          value="—"
-          sub="Total acumulado"
-          color="warning"
-        />
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Contenedores</span>
+          <span class="text-3xl font-semibold text-eco-text-primary" id="val-total">—</span>
+          <span class="text-xs text-eco-text-secondary" id="sub-total">cargando...</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Criticos ahora</span>
+          <span class="text-3xl font-semibold text-eco-danger" id="val-critical">—</span>
+          <span class="text-xs text-eco-text-secondary">umbral 80%</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Llenos en 24h</span>
+          <span class="text-3xl font-semibold text-eco-warning" id="val-predicted">—</span>
+          <span class="text-xs text-eco-text-secondary">prediccion IA</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Recolectores</span>
+          <span class="text-3xl font-semibold text-eco-green" id="val-collectors">—</span>
+          <span class="text-xs text-eco-text-secondary" id="sub-collectors">cargando...</span>
+        </div>
       </section>
 
-      <!-- Mapa + Críticos -->
+      <!-- Metricas fila 2: eficiencia e impacto -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Combustible ahorrado</span>
+          <span class="text-3xl font-semibold text-eco-info" id="val-km-saved">—</span>
+          <span class="text-xs text-eco-text-secondary" id="sub-km-saved">vs ruta estandar</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">CO2 evitado</span>
+          <span class="text-3xl font-semibold text-eco-green" id="val-co2">—</span>
+          <span class="text-xs text-eco-text-secondary">kg por operacion</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Ahorro diario</span>
+          <span class="text-3xl font-semibold text-eco-green" id="val-savings">—</span>
+          <span class="text-xs text-eco-text-secondary">MXN en combustible</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Reduccion ruta</span>
+          <span class="text-3xl font-semibold text-eco-info" id="val-reduction">—</span>
+          <span class="text-xs text-eco-text-secondary">eficiencia IA</span>
+        </div>
+      </section>
+
+      <!-- Mapa + Criticos -->
       <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Mapa -->
         <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
-          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Mapa de contenedores — CDMX</h2>
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Mapa de contenedores — CDMX</h2>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-eco-green animate-pulse"></span>
+              <span class="text-xs text-eco-text-secondary">En vivo</span>
+            </div>
+          </div>
           <MapView id="map" height="h-64" />
           <div class="flex gap-4 text-xs text-eco-text-secondary">
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-danger inline-block"></span>Crítico +80%</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-danger inline-block"></span>Critico +80%</span>
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-warning inline-block"></span>Medio 50–80%</span>
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-green inline-block"></span>Normal &lt;50%</span>
           </div>
         </div>
-
         <CriticalList />
+      </section>
+
+      <!-- Predicciones IA -->
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Predicciones IA — proximas 24h</h2>
+          <span class="text-xs bg-eco-green text-white px-2 py-0.5 rounded-full" id="model-badge">Modelo cargando...</span>
+        </div>
+        <ul id="prediction-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <li class="text-xs text-eco-text-secondary">Cargando predicciones...</li>
+        </ul>
       </section>
 
       <!-- Rutas + Reportes -->
@@ -78,80 +99,156 @@ import ReportList from '../../components/ReportList.astro';
         <ReportList />
       </section>
 
+      <!-- Metricas por zona -->
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Desglose por zona</h2>
+        <div id="zone-list" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <p class="text-xs text-eco-text-secondary">Cargando zonas...</p>
+        </div>
+      </section>
+
     </main>
   </div>
 </Layout>
 
 <script>
-  // ── Mapa (initialized by MapView component) ──────────────────
-  const L = (window as any).__L__;
-  const map = (window as any).__maps__?.['map'];
+const API = window.__API__;
+const L = (window as any).__L__;
+const map = (window as any).__maps__?.['map'];
 
-  const markers: any[] = [];
+const markers: any[] = [];
 
-  function markerColor(fill: number) {
-    if (fill >= 0.8) return '#ef4444';
-    if (fill >= 0.5) return '#f59e0b';
-    return '#16a34a';
-  }
+function markerColor(fill: number) {
+  if (fill >= 0.8) return '#ef4444';
+  if (fill >= 0.5) return '#f59e0b';
+  return '#16a34a';
+}
 
-  function circleIcon(color: string) {
-    return L.divIcon({
-      className: '',
-      html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
+function circleIcon(color: string) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+    iconSize: [12, 12], iconAnchor: [6, 6],
+  });
+}
+
+async function loadMap() {
+  try {
+    const res = await fetch(`${API}/api/v1/containers/readings`);
+    const containers: any[] = await res.json();
+    markers.forEach(m => m.remove());
+    markers.length = 0;
+    containers.forEach(c => {
+      const color = markerColor(c.fill_level);
+      const m = L.marker([c.latitude, c.longitude], { icon: circleIcon(color) })
+        .bindPopup(`<b>${c.container_id}</b><br/>Zona: ${c.zone}<br/>Nivel: ${Math.round(c.fill_level * 100)}%`)
+        .addTo(map);
+      markers.push(m);
     });
-  }
+  } catch {}
+}
 
-  async function loadMap() {
-    const API = window.__API__;
-    try {
-      const res = await fetch(`${API}/api/v1/containers/readings`);
-      const containers: any[] = await res.json();
+loadMap();
+setInterval(loadMap, 10_000);
 
-      // Limpiar markers anteriores
-      markers.forEach(m => m.remove());
-      markers.length = 0;
+// ── Metricas ──────────────────────────────────────────────────────
+async function loadMetrics() {
+  try {
+    const res = await fetch(`${API}/api/v1/metrics/`);
+    const data = await res.json();
 
-      containers.forEach(c => {
-        const color = markerColor(c.fill_level);
-        const m = L.marker([c.latitude, c.longitude], { icon: circleIcon(color) })
-          .bindPopup(`
-            <b>${c.container_id}</b><br/>
-            Zona: ${c.zone}<br/>
-            Nivel: ${Math.round(c.fill_level * 100)}%<br/>
-            <small>${new Date(c.timestamp).toLocaleTimeString('es-MX')}</small>
-          `)
-          .addTo(map);
-        markers.push(m);
-      });
-    } catch (e) {
-      console.warn('No se pudo cargar el mapa:', e);
+    const sys = data.system;
+    setText('val-total', sys.total_containers_monitored);
+    setText('sub-total', `${sys.total_sensors_registered} sensores`);
+    setText('val-critical', sys.containers_critical);
+    setText('val-predicted', sys.containers_predicted_full_24h);
+    setText('val-collectors', sys.active_collectors);
+    setText('sub-collectors', `de ${sys.total_collectors} totales`);
+
+    const eff = data.efficiency;
+    setText('val-km-saved', `${data.environmental.fuel_saved_liters} L`);
+    setText('sub-km-saved', `${eff.distance_saved_km} km ahorrados`);
+    setText('val-co2', `${data.environmental.co2_avoided_kg} kg`);
+    setText('val-savings', `$${data.financial.daily_fuel_savings_mxn}`);
+    setText('val-reduction', `${eff.distance_reduction_pct}%`);
+
+    loadZones(data.zones);
+  } catch {}
+}
+
+function setText(id: string, val: any) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(val);
+}
+
+function loadZones(zones: any[]) {
+  const el = document.getElementById('zone-list')!;
+  if (!zones || zones.length === 0) return;
+  el.innerHTML = zones.map(z => {
+    const pct = Math.round(z.avg_fill_level * 100);
+    const barColor = pct >= 80 ? 'bg-eco-danger' : pct >= 50 ? 'bg-eco-warning' : 'bg-eco-green';
+    return `
+      <div class="bg-eco-bg-header rounded-lg p-3 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-eco-text-primary capitalize">${z.zone}</span>
+          <span class="text-xs text-eco-text-secondary">${z.critical_containers} criticos</span>
+        </div>
+        <div class="h-2 bg-eco-border rounded-full overflow-hidden">
+          <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-eco-text-secondary">
+          <span>${z.total_containers} contenedores</span>
+          <span>${pct}% promedio</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+loadMetrics();
+setInterval(loadMetrics, 15_000);
+
+// ── Predicciones ───────────────────────────────────────────────────
+async function loadPredictions() {
+  const list = document.getElementById('prediction-list')!;
+  const badge = document.getElementById('model-badge')!;
+  try {
+    const res = await fetch(`${API}/api/v1/predictions/`);
+    if (!res.ok) {
+      badge.textContent = 'Modelo entrenando...';
+      list.innerHTML = '<li class="text-xs text-eco-text-secondary col-span-2">El modelo de IA esta entrenando con los datos del simulador. Disponible en unos momentos.</li>';
+      return;
     }
-  }
+    const data = await res.json();
+    const preds: any[] = data.predictions ?? [];
+    badge.textContent = `Modelo activo · ${preds.length} predicciones`;
 
-  loadMap();
-  setInterval(loadMap, 10_000);
+    const urgent = preds.filter(p => p.estimated_hours_to_full !== null && p.estimated_hours_to_full <= 24);
 
-  // ── Métricas dinámicas ────────────────────────────────────────
-  async function loadStats() {
-    const API = window.__API__;
-    try {
-      const [critRes, repRes] = await Promise.all([
-        fetch(`${API}/api/v1/containers/critical?threshold=0.8`),
-        fetch(`${API}/api/v1/reports/citizen`),
-      ]);
-      const critData = await critRes.json();
-      const repData  = await repRes.json();
+    if (urgent.length === 0) {
+      list.innerHTML = '<li class="text-xs text-eco-text-secondary col-span-2">Sin contenedores urgentes en las proximas 24h.</li>';
+      return;
+    }
 
-      const critEl = document.querySelector('#stat-critical .text-3xl');
-      const repEl  = document.querySelector('#stat-reports .text-3xl');
-      if (critEl) critEl.textContent = critData.count ?? '—';
-      if (repEl)  repEl.textContent  = Array.isArray(repData) ? repData.length : '—';
-    } catch { /* silencioso */ }
-  }
+    list.innerHTML = urgent.slice(0, 8).map(p => {
+      const hrs = p.estimated_hours_to_full?.toFixed(1) ?? '?';
+      const pct = Math.round(p.current_fill_level * 100);
+      const pred = Math.round(p.predicted_fill_24h * 100);
+      const confColor = p.confidence === 'high' ? 'text-eco-danger' : p.confidence === 'medium' ? 'text-eco-warning' : 'text-eco-text-secondary';
+      return `
+        <li class="flex items-center justify-between rounded-lg bg-eco-bg-header px-3 py-2 gap-2">
+          <div>
+            <p class="text-sm font-medium text-eco-text-primary">${p.container_id}</p>
+            <p class="text-xs text-eco-text-secondary capitalize">${p.zone} · ahora ${pct}% → 24h ${pred}%</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-sm font-medium text-eco-danger">${hrs}h</p>
+            <p class="text-xs ${confColor}">${p.confidence}</p>
+          </div>
+        </li>`;
+    }).join('');
+  } catch {}
+}
 
-  loadStats();
-  setInterval(loadStats, 10_000);
+loadPredictions();
+setInterval(loadPredictions, 20_000);
 </script>

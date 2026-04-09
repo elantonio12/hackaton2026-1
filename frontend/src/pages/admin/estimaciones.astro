@@ -1,10 +1,17 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import AppHeader from '../../components/AppHeader.astro';
+import { adminNav } from '../../lib/nav';
 ---
 
-<Layout title="Estimaciones Futuras">
-  <main class="h-full overflow-y-auto p-6">
-    <h1 class="text-2xl font-bold text-eco-text-primary mb-6">Estimaciones Futuras</h1>
-    <!-- TODO: Visualización de estimaciones y predicciones -->
-  </main>
+<Layout title="Estimaciones">
+  <div class="h-app overflow-y-auto bg-eco-bg">
+    <AppHeader title="Estimaciones" nav={adminNav} />
+    <main class="max-w-6xl mx-auto px-4 py-6">
+      <h1 class="text-2xl font-semibold text-eco-text-primary mb-4">Estimaciones futuras</h1>
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6">
+        <p class="text-sm text-eco-text-secondary">Visualizacion de estimaciones y predicciones (en construccion).</p>
+      </div>
+    </main>
+  </div>
 </Layout>
