@@ -6,7 +6,6 @@ GET  /api/v1/user/container/{id}      → Nivel de llenado del contenedor privad
 POST /api/v1/user/report              → Reportar un problema
 GET  /api/v1/user/active-trucks       → Camiones activos en la zona
 GET  /api/v1/user/truck-eta           → ETA del camión a un contenedor específico
-GET  /api/v1/user/reports             → Consultar reportes de problemas
 """
 
 from datetime import datetime, timezone, timedelta
@@ -30,26 +29,61 @@ VALID_ZONES = {"norte", "centro", "sur"}
 
 # ---------------------------------------------------------------------------
 # Políticas de horarios por zona (CDMX)
+# Días basados en el calendario oficial SEDEMA 2026 (programa Basura Cero):
+#   Orgánicos:    martes, jueves y sábado
+#   Inorgánicos:  lunes, miércoles, viernes y domingo
+# Horarios diferenciados por zona según densidad de recolección.
+# Fuente: SEDEMA / Gobierno CDMX, enero 2026
 # ---------------------------------------------------------------------------
 
 ZONE_SCHEDULES = {
     "norte": {
-        "dias": ["lunes", "miércoles", "viernes"],
-        "hora_inicio": 7,
-        "hora_fin": 14,
-        "descripcion": "Zona Norte: recolección lunes, miércoles y viernes de 7:00 a 14:00 hrs",
+        "organicos": {
+            "dias": ["martes", "jueves", "sábado"],
+            "hora_inicio": 7,
+            "hora_fin": 13,
+        },
+        "inorganicos": {
+            "dias": ["lunes", "miércoles", "viernes", "domingo"],
+            "hora_inicio": 7,
+            "hora_fin": 13,
+        },
+        "descripcion": (
+            "Zona Norte — Orgánicos (bolsa verde): martes, jueves y sábado de 7:00 a 13:00 hrs. "
+            "Inorgánicos (bolsa gris/naranja): lunes, miércoles, viernes y domingo de 7:00 a 13:00 hrs."
+        ),
     },
     "centro": {
-        "dias": ["martes", "jueves", "sábado"],
-        "hora_inicio": 8,
-        "hora_fin": 15,
-        "descripcion": "Zona Centro: recolección martes, jueves y sábado de 8:00 a 15:00 hrs",
+        "organicos": {
+            "dias": ["martes", "jueves", "sábado"],
+            "hora_inicio": 8,
+            "hora_fin": 14,
+        },
+        "inorganicos": {
+            "dias": ["lunes", "miércoles", "viernes", "domingo"],
+            "hora_inicio": 8,
+            "hora_fin": 14,
+        },
+        "descripcion": (
+            "Zona Centro — Orgánicos (bolsa verde): martes, jueves y sábado de 8:00 a 14:00 hrs. "
+            "Inorgánicos (bolsa gris/naranja): lunes, miércoles, viernes y domingo de 8:00 a 14:00 hrs."
+        ),
     },
     "sur": {
-        "dias": ["lunes", "jueves"],
-        "hora_inicio": 9,
-        "hora_fin": 16,
-        "descripcion": "Zona Sur: recolección lunes y jueves de 9:00 a 16:00 hrs",
+        "organicos": {
+            "dias": ["martes", "jueves", "sábado"],
+            "hora_inicio": 9,
+            "hora_fin": 15,
+        },
+        "inorganicos": {
+            "dias": ["lunes", "miércoles", "viernes", "domingo"],
+            "hora_inicio": 9,
+            "hora_fin": 15,
+        },
+        "descripcion": (
+            "Zona Sur — Orgánicos (bolsa verde): martes, jueves y sábado de 9:00 a 15:00 hrs. "
+            "Inorgánicos (bolsa gris/naranja): lunes, miércoles, viernes y domingo de 9:00 a 15:00 hrs."
+        ),
     },
 }
 
@@ -64,6 +98,7 @@ WEEKDAY_NAMES = {
 
 class NextTruckResponse(BaseModel):
     zone: str
+    tipo_residuo: str           # "organicos" o "inorganicos"
     proximo_dia: str
     hora_inicio: str
     hora_fin: str
@@ -121,49 +156,65 @@ class ActiveTrucksResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_next_collection(zone: str) -> dict:
-    """Calcula el próximo día y hora de recolección para una zona."""
+def _get_next_collection(zone: str, tipo_residuo: str | None = None) -> dict:
+    """
+    Calcula el próximo camión de recolección para una zona.
+    Si tipo_residuo es 'organicos' o 'inorganicos', filtra solo ese tipo.
+    Si no se especifica, retorna el que llegue más pronto de cualquier tipo.
+    """
     schedule = ZONE_SCHEDULES[zone]
     now = datetime.now(timezone.utc)
     cdmx_now = now - timedelta(hours=6)
     current_weekday = cdmx_now.weekday()
     current_hour = cdmx_now.hour
     current_day_name = WEEKDAY_NAMES[current_weekday]
-
-    collection_days = schedule["dias"]
-    hora_inicio = schedule["hora_inicio"]
-    hora_fin = schedule["hora_fin"]
-
-    if current_day_name in collection_days and hora_inicio <= current_hour < hora_fin:
-        return {
-            "proximo_dia": current_day_name,
-            "hora_inicio": f"{hora_inicio:02d}:00",
-            "hora_fin": f"{hora_fin:02d}:00",
-            "en_curso": True,
-            "horas_para_siguiente": None,
-        }
-
     weekday_map = {v: k for k, v in WEEKDAY_NAMES.items()}
-    min_hours = float("inf")
-    next_day_name = None
 
-    for day_name in collection_days:
-        target_weekday = weekday_map[day_name]
-        days_ahead = (target_weekday - current_weekday) % 7
-        if days_ahead == 0 and current_hour >= hora_fin:
-            days_ahead = 7
-        hours_ahead = days_ahead * 24 + (hora_inicio - current_hour)
-        if hours_ahead < min_hours:
-            min_hours = hours_ahead
-            next_day_name = day_name
+    # Filtrar por tipo si se especificó
+    tipos = (
+        [(tipo_residuo, schedule[tipo_residuo])]
+        if tipo_residuo
+        else [("organicos", schedule["organicos"]), ("inorganicos", schedule["inorganicos"])]
+    )
 
-    return {
-        "proximo_dia": next_day_name,
-        "hora_inicio": f"{hora_inicio:02d}:00",
-        "hora_fin": f"{hora_fin:02d}:00",
-        "en_curso": False,
-        "horas_para_siguiente": round(min_hours, 1),
-    }
+    best = None
+    best_hours = float("inf")
+
+    for tipo, config in tipos:
+        hora_inicio = config["hora_inicio"]
+        hora_fin = config["hora_fin"]
+        collection_days = config["dias"]
+
+        # ¿Está en curso ahora mismo?
+        if current_day_name in collection_days and hora_inicio <= current_hour < hora_fin:
+            return {
+                "tipo_residuo": tipo,
+                "proximo_dia": current_day_name,
+                "hora_inicio": f"{hora_inicio:02d}:00",
+                "hora_fin": f"{hora_fin:02d}:00",
+                "en_curso": True,
+                "horas_para_siguiente": None,
+            }
+
+        # Buscar el más próximo
+        for day_name in collection_days:
+            target_weekday = weekday_map[day_name]
+            days_ahead = (target_weekday - current_weekday) % 7
+            if days_ahead == 0 and current_hour >= hora_fin:
+                days_ahead = 7
+            hours_ahead = days_ahead * 24 + (hora_inicio - current_hour)
+            if hours_ahead < best_hours:
+                best_hours = hours_ahead
+                best = {
+                    "tipo_residuo": tipo,
+                    "proximo_dia": day_name,
+                    "hora_inicio": f"{hora_inicio:02d}:00",
+                    "hora_fin": f"{hora_fin:02d}:00",
+                    "en_curso": False,
+                    "horas_para_siguiente": round(hours_ahead, 1),
+                }
+
+    return best
 
 
 def _fill_status(fill_level: float) -> str:
@@ -186,10 +237,17 @@ problem_reports: list[dict] = []
 # ---------------------------------------------------------------------------
 
 @router.get("/next-truck", response_model=NextTruckResponse)
-async def get_next_truck(zone: str):
+async def get_next_truck(zone: str, tipo_residuo: str | None = None):
     """
     Retorna cuándo pasa el próximo camión de recolección por la zona.
-    Zonas válidas: norte, centro, sur
+
+    - zone: norte, centro o sur
+    - tipo_residuo (opcional): 'organicos' o 'inorganicos'
+      Si no se especifica, devuelve el camión más próximo de cualquier tipo.
+
+    Calendario oficial SEDEMA 2026 (Basura Cero):
+      Orgánicos (bolsa verde):   martes, jueves y sábado
+      Inorgánicos (bolsa gris/naranja): lunes, miércoles, viernes y domingo
     """
     zone = zone.lower()
     if zone not in VALID_ZONES:
@@ -198,8 +256,16 @@ async def get_next_truck(zone: str):
             detail=f"Zona inválida '{zone}'. Usa: norte, centro o sur.",
         )
 
+    if tipo_residuo is not None:
+        tipo_residuo = tipo_residuo.lower()
+        if tipo_residuo not in {"organicos", "inorganicos"}:
+            raise HTTPException(
+                status_code=400,
+                detail="tipo_residuo debe ser 'organicos' o 'inorganicos'.",
+            )
+
     schedule = ZONE_SCHEDULES[zone]
-    next_collection = _get_next_collection(zone)
+    next_collection = _get_next_collection(zone, tipo_residuo)
 
     return NextTruckResponse(
         zone=zone,
