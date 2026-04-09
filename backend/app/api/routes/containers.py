@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,10 +79,39 @@ async def get_reading(container_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/critical")
 async def get_critical_containers(
-    threshold: float = 0.8, db: AsyncSession = Depends(get_db)
+    threshold: float = 0.8,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(ContainerReading).where(ContainerReading.fill_level >= threshold)
+    """Return critical containers ordered by fill level (most full first).
+
+    Paginated to prevent DOM overflow when thousands of containers are
+    above the threshold. Use `total` for the full count and `limit`/`offset`
+    to page through results.
+    """
+    # Total count (cheap single query)
+    total_result = await db.execute(
+        select(func.count())
+        .select_from(ContainerReading)
+        .where(ContainerReading.fill_level >= threshold)
     )
-    critical = [r.to_dict() for r in result.scalars().all()]
-    return {"count": len(critical), "containers": critical}
+    total = total_result.scalar() or 0
+
+    # Page of most-critical containers
+    page_result = await db.execute(
+        select(ContainerReading)
+        .where(ContainerReading.fill_level >= threshold)
+        .order_by(ContainerReading.fill_level.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    critical = [r.to_dict() for r in page_result.scalars().all()]
+
+    return {
+        "total": total,
+        "count": len(critical),
+        "limit": limit,
+        "offset": offset,
+        "containers": critical,
+    }

@@ -1,46 +1,71 @@
 ---
-// Rendered client-side via script below
+/**
+ * Critical containers panel. At scale (thousands of critical containers)
+ * the full list would blow out the DOM, so we render only the top N
+ * inside an internal scroll container and show the total count in the
+ * header.
+ */
 ---
 
 <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
-  <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Contenedores críticos</h2>
-  <ul id="critical-list" class="flex flex-col gap-2">
+  <div class="flex items-center justify-between gap-3">
+    <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">
+      Contenedores críticos
+    </h2>
+    <span id="critical-count-badge"
+          class="text-xs font-medium text-eco-danger bg-eco-bg-header px-2 py-0.5 rounded-full">
+      —
+    </span>
+  </div>
+  <p id="critical-hint" class="text-xs text-eco-text-secondary">
+    Mostrando los más urgentes. Haz scroll para ver más.
+  </p>
+  <ul id="critical-list" class="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
     <li class="text-xs text-eco-text-secondary">Cargando...</li>
   </ul>
 </div>
 
 <script>
-  const ZONE_COLORS: Record<string, string> = {
-    centro: 'bg-blue-100 text-blue-800',
-    norte:  'bg-purple-100 text-purple-800',
-    sur:    'bg-orange-100 text-orange-800',
-  };
+  const CRITICAL_PAGE_SIZE = 50;
 
   async function loadCritical() {
     const list = document.getElementById('critical-list')!;
+    const badge = document.getElementById('critical-count-badge')!;
+    const hint = document.getElementById('critical-hint')!;
     try {
-      const res = await fetch(`${window.__API__}/api/v1/containers/critical?threshold=0.8`);
+      const url = `${window.__API__}/api/v1/containers/critical`
+        + `?threshold=0.8&limit=${CRITICAL_PAGE_SIZE}&offset=0`;
+      const res = await fetch(url);
       const data = await res.json();
+      const total: number = data.total ?? 0;
       const containers: any[] = data.containers ?? [];
 
+      badge.textContent = `${total.toLocaleString('es-MX')} críticos`;
+
       if (containers.length === 0) {
+        hint.textContent = '';
         list.innerHTML = '<li class="text-xs text-eco-text-secondary">Sin contenedores críticos</li>';
         return;
       }
 
-      const sorted = containers.sort((a, b) => b.fill_level - a.fill_level);
-      list.innerHTML = sorted.map(c => {
+      if (total > containers.length) {
+        hint.textContent = `Mostrando los ${containers.length} más urgentes de ${total.toLocaleString('es-MX')} críticos.`;
+      } else {
+        hint.textContent = `Todos los contenedores críticos (${total}).`;
+      }
+
+      // Containers are already sorted desc by fill_level from the API.
+      list.innerHTML = containers.map(c => {
         const pct = Math.round(c.fill_level * 100);
         const barColor = pct >= 90 ? 'bg-eco-danger' : 'bg-eco-warning';
-        const zoneClass = ZONE_COLORS[c.zone] ?? 'bg-gray-100 text-gray-700';
         return `
           <li class="flex items-center gap-2 text-sm">
-            <span class="font-medium w-20 shrink-0 text-eco-text-primary">${c.container_id}</span>
+            <span class="font-medium w-24 shrink-0 text-eco-text-primary truncate">${c.container_id}</span>
             <div class="flex-1 h-2 bg-eco-border rounded-full overflow-hidden">
               <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
             </div>
             <span class="text-xs text-eco-text-secondary w-10 text-right shrink-0">${pct}%</span>
-            <span class="text-xs px-2 py-0.5 rounded-full shrink-0 ${zoneClass}">${c.zone}</span>
+            <span class="text-xs text-eco-text-secondary w-28 text-right truncate shrink-0 capitalize">${(c.zone || '').replace(/_/g, ' ')}</span>
           </li>`;
       }).join('');
     } catch {
@@ -49,5 +74,5 @@
   }
 
   loadCritical();
-  setInterval(loadCritical, 10_000);
+  setInterval(loadCritical, 30_000);
 </script>

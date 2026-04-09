@@ -62,35 +62,42 @@ import { adminNav } from '../../lib/nav';
         </div>
       </section>
 
-      <!-- Mapa + Criticos -->
-      <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
-          <div class="flex items-center justify-between">
-            <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Mapa de contenedores — CDMX</h2>
+      <!-- Mapa: sección dedicada full-width -->
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">
+            Mapa de contenedores — CDMX
+          </h2>
+          <div class="flex items-center gap-3">
+            <span id="map-count" class="text-xs text-eco-text-secondary">—</span>
             <div class="flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full bg-eco-green animate-pulse"></span>
               <span class="text-xs text-eco-text-secondary">En vivo</span>
             </div>
           </div>
-          <MapView id="map" height="h-64" />
-          <div class="flex gap-4 text-xs text-eco-text-secondary">
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-danger inline-block"></span>Critico +80%</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-warning inline-block"></span>Medio 50–80%</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-green inline-block"></span>Normal &lt;50%</span>
-          </div>
         </div>
-        <CriticalList />
+        <MapView id="map" height="h-[560px]" />
+        <div class="flex flex-wrap gap-4 text-xs text-eco-text-secondary">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-danger inline-block"></span>Critico +80%</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-warning inline-block"></span>Medio 50–80%</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-green inline-block"></span>Normal &lt;50%</span>
+        </div>
       </section>
 
-      <!-- Predicciones IA -->
-      <section class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Predicciones IA — proximas 24h</h2>
-          <span class="text-xs bg-eco-green text-white px-2 py-0.5 rounded-full" id="model-badge">Modelo cargando...</span>
+      <!-- Críticos + Predicciones IA lado a lado -->
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <CriticalList />
+
+        <!-- Predicciones IA (dentro del grid con Críticos) -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Predicciones IA — próximas 24h</h2>
+            <span class="text-xs bg-eco-green text-white px-2 py-0.5 rounded-full" id="model-badge">Modelo cargando...</span>
+          </div>
+          <ul id="prediction-list" class="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
+            <li class="text-xs text-eco-text-secondary">Cargando predicciones...</li>
+          </ul>
         </div>
-        <ul id="prediction-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <li class="text-xs text-eco-text-secondary">Cargando predicciones...</li>
-        </ul>
       </section>
 
       <!-- Rutas + Reportes -->
@@ -137,6 +144,9 @@ async function loadMap() {
   try {
     const res = await fetch(`${API}/api/v1/containers/readings`);
     const containers: any[] = await res.json();
+
+    const countEl = document.getElementById('map-count');
+    if (countEl) countEl.textContent = `${containers.length.toLocaleString('es-MX')} contenedores`;
 
     const seen = new Set<string>();
     const newMarkers: any[] = [];
@@ -264,20 +274,23 @@ async function loadPredictions() {
     const urgent = preds.filter(p => p.estimated_hours_to_full !== null && p.estimated_hours_to_full <= 24);
 
     if (urgent.length === 0) {
-      list.innerHTML = '<li class="text-xs text-eco-text-secondary col-span-2">Sin contenedores urgentes en las proximas 24h.</li>';
+      list.innerHTML = '<li class="text-xs text-eco-text-secondary">Sin contenedores urgentes en las próximas 24h.</li>';
       return;
     }
 
-    list.innerHTML = urgent.slice(0, 8).map(p => {
+    // Show top 50 most urgent inside the scrollable container
+    const top = urgent.sort((a, b) => (a.estimated_hours_to_full ?? 999) - (b.estimated_hours_to_full ?? 999)).slice(0, 50);
+    list.innerHTML = top.map(p => {
       const hrs = p.estimated_hours_to_full?.toFixed(1) ?? '?';
       const pct = Math.round(p.current_fill_level * 100);
       const pred = Math.round(p.predicted_fill_24h * 100);
       const confColor = p.confidence === 'high' ? 'text-eco-danger' : p.confidence === 'medium' ? 'text-eco-warning' : 'text-eco-text-secondary';
+      const zoneLabel = (p.zone || '').replace(/_/g, ' ');
       return `
         <li class="flex items-center justify-between rounded-lg bg-eco-bg-header px-3 py-2 gap-2">
-          <div>
-            <p class="text-sm font-medium text-eco-text-primary">${p.container_id}</p>
-            <p class="text-xs text-eco-text-secondary capitalize">${p.zone} · ahora ${pct}% → 24h ${pred}%</p>
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-eco-text-primary truncate">${p.container_id}</p>
+            <p class="text-xs text-eco-text-secondary capitalize truncate">${zoneLabel} · ahora ${pct}% → 24h ${pred}%</p>
           </div>
           <div class="text-right shrink-0">
             <p class="text-sm font-medium text-eco-danger">${hrs}h</p>

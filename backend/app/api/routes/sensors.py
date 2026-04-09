@@ -1,4 +1,5 @@
-import random
+import logging
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.auth import require_admin
+from app.data.cdmx_data import generate_containers
 from app.db.database import get_db
 from app.db.models import ContainerReading as ContainerReadingModel
 from app.db.models import Sensor, User
@@ -19,6 +21,8 @@ from app.models.schemas import (
     SensorRegistration,
     SensorUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 sensor_security = HTTPBearer()
@@ -38,40 +42,46 @@ async def verify_sensor_token(
     return credentials.credentials
 
 # ---------------------------------------------------------------------------
-# Seed demo data
+# Seed demo data — CDMX alcaldías
 # ---------------------------------------------------------------------------
 
-ZONES = {
-    "centro": {"lat": 19.4326, "lon": -99.1332},
-    "norte": {"lat": 19.4890, "lon": -99.1250},
-    "sur": {"lat": 19.3600, "lon": -99.1560},
-}
-CONTAINERS_PER_ZONE = 17
+# Match the simulator's scale. The simulator in simulator/sensors/container.py
+# also reads NUM_CONTAINERS and uses the same generator, so both agree on
+# the exact same container IDs, coordinates, and alcaldías.
+SEED_SENSOR_COUNT = int(os.environ.get("SEED_SENSOR_COUNT", "10000"))
+
+# Insert sensors in chunks to avoid oversized parameter lists in asyncpg.
+_SEED_CHUNK_SIZE = 1000
 
 
 async def seed_sensor_registry(db: AsyncSession) -> None:
-    random.seed(42)
-    idx = 1
-    sensors = []
-    for zone_name, center in ZONES.items():
-        count = CONTAINERS_PER_ZONE if zone_name != "sur" else 16
-        for _ in range(count):
-            container_id = f"CNT-{idx:03d}"
-            sensor_id = f"SENSOR-{container_id}"
-            sensors.append({
-                "sensor_id": sensor_id,
-                "container_id": container_id,
-                "latitude": round(center["lat"] + random.uniform(-0.02, 0.02), 6),
-                "longitude": round(center["lon"] + random.uniform(-0.02, 0.02), 6),
-                "zone": zone_name,
-            })
-            idx += 1
+    """Populate the sensors table with one entry per simulated container.
 
-    if sensors:
-        stmt = pg_insert(Sensor).values(sensors)
+    Uses the shared cdmx_data.generate_containers() with seed=42 so the
+    resulting IDs and coordinates match exactly what the simulator posts.
+    """
+    containers = generate_containers(SEED_SENSOR_COUNT)
+
+    rows = [
+        {
+            "sensor_id": f"SENSOR-{c['id']}",
+            "container_id": c["id"],
+            "latitude": c["latitude"],
+            "longitude": c["longitude"],
+            "zone": c["zone"],
+        }
+        for c in containers
+    ]
+
+    inserted = 0
+    for i in range(0, len(rows), _SEED_CHUNK_SIZE):
+        chunk = rows[i:i + _SEED_CHUNK_SIZE]
+        stmt = pg_insert(Sensor).values(chunk)
         stmt = stmt.on_conflict_do_nothing(index_elements=["sensor_id"])
         await db.execute(stmt)
-        await db.commit()
+        inserted += len(chunk)
+    await db.commit()
+    logger.info("[sensors] Seed registry: %d sensors across CDMX alcaldías", inserted)
 
 # ---------------------------------------------------------------------------
 # Endpoints
