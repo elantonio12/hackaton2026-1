@@ -154,6 +154,53 @@ class Truck(Base):
         return d
 
 
+class MetricSnapshot(Base):
+    """Hourly snapshot of system-wide KPIs.
+
+    Written by a background asyncio task in main.py every 5 minutes so the
+    /admin/metricas page can render real time-series charts (CO2 saved
+    over the last 24h, critical container count over time, etc.) instead
+    of just the current instant.
+
+    Denormalized on purpose: every column is a single number we want to
+    plot directly. No JSON blobs to parse on read.
+    """
+
+    __tablename__ = "metric_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+    # System
+    total_containers: Mapped[int] = mapped_column(Integer, default=0)
+    critical_containers: Mapped[int] = mapped_column(Integer, default=0)
+    avg_fill_level: Mapped[float] = mapped_column(Float, default=0.0)
+    predicted_full_24h: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Fleet
+    fleet_total: Mapped[int] = mapped_column(Integer, default=0)
+    fleet_active: Mapped[int] = mapped_column(Integer, default=0)
+    active_routes: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Efficiency
+    optimized_km: Mapped[float] = mapped_column(Float, default=0.0)
+    saved_km: Mapped[float] = mapped_column(Float, default=0.0)
+    distance_reduction_pct: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # Environmental + financial
+    fuel_saved_liters: Mapped[float] = mapped_column(Float, default=0.0)
+    co2_avoided_kg: Mapped[float] = mapped_column(Float, default=0.0)
+    fuel_cost_saved_mxn: Mapped[float] = mapped_column(Float, default=0.0)
+
+    def to_dict(self) -> dict:
+        d = {c.key: getattr(self, c.key) for c in self.__table__.columns}
+        if isinstance(d.get("timestamp"), datetime):
+            d["timestamp"] = d["timestamp"].isoformat()
+        return d
+
+
 class Route(Base):
     """Active or historical truck route. `stops` and `polyline_geojson`
     are stored as JSONB so the frontend can read the full route in a

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -64,6 +66,13 @@ async def startup():
 
     from app.services.truck_prediction import train_initial_model as train_truck_model
     train_truck_model()
+
+    # 6. Start the persistent metrics snapshot loop. Fire-and-forget — it
+    # writes one MetricSnapshot row every 5 minutes so /metrics/history
+    # has time-series data for the admin charts. Survives restarts because
+    # it persists to Postgres, not in-memory.
+    from app.services.metrics_snapshot import snapshot_loop
+    asyncio.create_task(snapshot_loop())
 
 
 @app.get("/health")

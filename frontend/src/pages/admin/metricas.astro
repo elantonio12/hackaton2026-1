@@ -7,11 +7,521 @@ import { adminNav } from '../../lib/nav';
 <Layout title="Metricas" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Metricas" nav={adminNav} />
-    <main class="max-w-6xl mx-auto px-4 py-6">
-      <h1 class="text-2xl font-semibold text-eco-text-primary mb-4">Metricas del sistema</h1>
-      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6">
-        <p class="text-sm text-eco-text-secondary">Graficas y KPIs del sistema (en construccion).</p>
+
+    <main class="max-w-6xl mx-auto px-4 py-5 flex flex-col gap-5">
+
+      <!-- Page header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold text-eco-text-primary">Métricas del sistema</h1>
+          <p id="last-updated" class="text-xs text-eco-text-secondary">Cargando…</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-eco-green animate-pulse"></span>
+          <span class="text-xs text-eco-text-secondary">En vivo · 20s</span>
+        </div>
       </div>
+
+      <!-- Hero KPIs -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-5 flex flex-col gap-2">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">CO₂ evitado hoy</span>
+          <div class="flex items-baseline gap-1">
+            <span id="hero-co2" class="text-5xl font-bold text-eco-green">—</span>
+            <span class="text-sm text-eco-text-secondary">kg</span>
+          </div>
+          <span id="hero-co2-context" class="text-xs text-eco-text-secondary">≈ — árboles plantados</span>
+        </div>
+
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-5 flex flex-col gap-2">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Combustible ahorrado</span>
+          <div class="flex items-baseline gap-1">
+            <span id="hero-fuel" class="text-5xl font-bold text-eco-info">—</span>
+            <span class="text-sm text-eco-text-secondary">L</span>
+          </div>
+          <span id="hero-fuel-context" class="text-xs text-eco-text-secondary">≈ — tanques de auto</span>
+        </div>
+
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-5 flex flex-col gap-2">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Ahorro económico</span>
+          <div class="flex items-baseline gap-1">
+            <span class="text-2xl font-semibold text-eco-text-primary">$</span>
+            <span id="hero-mxn" class="text-5xl font-bold text-eco-green">—</span>
+          </div>
+          <span id="hero-mxn-context" class="text-xs text-eco-text-secondary">— MXN/año proyectado</span>
+        </div>
+
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-5 flex flex-col gap-2">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Eficiencia ruta</span>
+          <div class="flex items-baseline gap-1">
+            <span id="hero-efficiency" class="text-5xl font-bold text-eco-warning">—</span>
+            <span class="text-sm text-eco-text-secondary">%</span>
+          </div>
+          <span id="hero-efficiency-context" class="text-xs text-eco-text-secondary">— km ahorrados vs ruta estándar</span>
+        </div>
+      </section>
+
+      <!-- Time series: 24h history -->
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">CO₂ evitado · 24h</h2>
+            <span id="hist-co2-summary" class="text-xs text-eco-text-secondary">—</span>
+          </div>
+          <svg id="chart-co2" viewBox="0 0 600 200" class="w-full h-44"></svg>
+        </div>
+
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Contenedores críticos · 24h</h2>
+            <span id="hist-crit-summary" class="text-xs text-eco-text-secondary">—</span>
+          </div>
+          <svg id="chart-critical" viewBox="0 0 600 200" class="w-full h-44"></svg>
+        </div>
+      </section>
+
+      <!-- Snapshot charts: histogram + top alcaldias + fleet donut + predictions -->
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Fill level histogram -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Distribución de niveles</h2>
+          <p class="text-xs text-eco-text-secondary -mt-2">10K contenedores agrupados en buckets de 10%</p>
+          <div id="histogram" class="flex items-end gap-1.5 h-40 mt-1">
+            <p class="text-xs text-eco-text-secondary self-center">Cargando…</p>
+          </div>
+        </div>
+
+        <!-- Top alcaldias por criticidad -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Top alcaldías críticas</h2>
+          <p class="text-xs text-eco-text-secondary -mt-2">Ordenadas por contenedores ≥ 80%</p>
+          <ul id="top-alcaldias" class="flex flex-col gap-2 mt-1">
+            <li class="text-xs text-eco-text-secondary">Cargando…</li>
+          </ul>
+        </div>
+
+        <!-- Fleet donut -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Estado de la flota</h2>
+          <div class="flex items-center gap-4 mt-1">
+            <svg id="fleet-donut" viewBox="0 0 100 100" class="w-32 h-32 shrink-0"></svg>
+            <ul id="fleet-legend" class="flex flex-col gap-1 text-xs text-eco-text-secondary flex-1">
+              <li>Cargando…</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Predictions next 24h binned -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Predicción de saturación</h2>
+          <p class="text-xs text-eco-text-secondary -mt-2">Contenedores que se llenarán por hora · IBM Granite TTM</p>
+          <div id="predictions-bars" class="flex items-end gap-1 h-40 mt-1">
+            <p class="text-xs text-eco-text-secondary self-center">Cargando…</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Per-zone table -->
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Desglose por alcaldía</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-xs text-eco-text-secondary uppercase tracking-wide border-b border-eco-border">
+                <th class="text-left py-2 pr-4">Alcaldía</th>
+                <th class="text-right py-2 px-2">Contenedores</th>
+                <th class="text-right py-2 px-2">Críticos</th>
+                <th class="text-right py-2 px-2">Promedio</th>
+                <th class="text-right py-2 pl-2">Tasa fill/h</th>
+              </tr>
+            </thead>
+            <tbody id="zone-table-body" class="text-eco-text-primary">
+              <tr><td colspan="5" class="text-xs text-eco-text-secondary py-3">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
   </div>
 </Layout>
+
+<script>
+  /**
+   * /admin/metricas — operational KPIs and historical analytics.
+   *
+   * Data sources:
+   *  - GET /metrics/              : current snapshot of system + efficiency
+   *  - GET /metrics/history?hours=24 : persisted snapshots for line charts
+   *  - GET /containers/readings   : 10K containers for the fill histogram
+   *  - GET /trucks/               : fleet for the status donut
+   *  - GET /predictions/          : IBM Granite TTM 24h forecasts
+   *
+   * All charts are inline SVG / CSS — no chart library, no extra bundle
+   * weight. The point is to render the same design tokens as the rest
+   * of the dashboard and stay snappy on the 10K-container payload.
+   */
+  const API = window.__API__;
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  function setText(id: string, val: string | number) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(val);
+  }
+
+  function fmtMxn(n: number): string {
+    return n.toLocaleString('es-MX', { maximumFractionDigits: 0 });
+  }
+
+  function fmtNum(n: number, digits = 1): string {
+    return n.toLocaleString('es-MX', { maximumFractionDigits: digits });
+  }
+
+  // ── Live current metrics ──────────────────────────────────────────
+  async function loadCurrent() {
+    try {
+      const res = await fetch(`${API}/api/v1/metrics/`);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const co2 = data.environmental.co2_avoided_kg;
+      const fuel = data.environmental.fuel_saved_liters;
+      const mxn = data.financial.daily_fuel_savings_mxn;
+      const yearly = data.financial.yearly_fuel_savings_mxn;
+      const efficiency = data.efficiency.distance_reduction_pct;
+      const savedKm = data.efficiency.distance_saved_km;
+
+      setText('hero-co2', fmtNum(co2));
+      // 21 kg CO2 absorbed per tree per year — divide co2 by 21/365 ≈ 0.0575
+      const trees = Math.max(0, Math.round(co2 / 0.0575));
+      setText('hero-co2-context', `≈ ${trees.toLocaleString('es-MX')} árboles plantados (1 año)`);
+
+      setText('hero-fuel', fmtNum(fuel));
+      // ~50 L per car tank
+      setText('hero-fuel-context', `≈ ${(fuel / 50).toFixed(1)} tanques de auto`);
+
+      setText('hero-mxn', fmtMxn(mxn));
+      setText('hero-mxn-context', `$${fmtMxn(yearly)} MXN/año proyectado`);
+
+      setText('hero-efficiency', fmtNum(efficiency));
+      setText('hero-efficiency-context', `${fmtNum(savedKm)} km ahorrados vs ruta estándar`);
+
+      const ts = new Date(data.generated_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setText('last-updated', `Actualizado a las ${ts}`);
+
+      renderZoneTable(data.zones || []);
+      renderTopAlcaldias(data.zones || []);
+    } catch {}
+  }
+
+  // ── Per-zone table + Top alcaldias ────────────────────────────────
+  function renderZoneTable(zones: any[]) {
+    const body = document.getElementById('zone-table-body')!;
+    if (!zones || zones.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="text-xs text-eco-text-secondary py-3">Sin datos.</td></tr>';
+      return;
+    }
+    // Sort by critical count desc
+    const sorted = [...zones].sort((a, b) => b.critical_containers - a.critical_containers);
+    body.innerHTML = sorted.map(z => {
+      const name = (z.zone || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+      const avgPct = Math.round(z.avg_fill_level * 100);
+      const ratePerH = (z.avg_fill_rate_per_hour ?? 0) * 100; // % per hour
+      const critColor = z.critical_containers > 50 ? 'text-eco-danger'
+                      : z.critical_containers > 10 ? 'text-eco-warning'
+                      : 'text-eco-text-secondary';
+      const avgColor = avgPct >= 60 ? 'text-eco-warning' : 'text-eco-text-primary';
+      return `
+        <tr class="border-b border-eco-border/50 hover:bg-eco-bg-header transition-colors">
+          <td class="py-2 pr-4">${name}</td>
+          <td class="text-right py-2 px-2">${z.total_containers.toLocaleString('es-MX')}</td>
+          <td class="text-right py-2 px-2 font-medium ${critColor}">${z.critical_containers}</td>
+          <td class="text-right py-2 px-2 ${avgColor}">${avgPct}%</td>
+          <td class="text-right py-2 pl-2 text-eco-text-secondary">${ratePerH.toFixed(2)}%</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function renderTopAlcaldias(zones: any[]) {
+    const list = document.getElementById('top-alcaldias')!;
+    if (!zones || zones.length === 0) {
+      list.innerHTML = '<li class="text-xs text-eco-text-secondary">Sin datos.</li>';
+      return;
+    }
+    const top = [...zones]
+      .sort((a, b) => b.critical_containers - a.critical_containers)
+      .slice(0, 8);
+    const max = Math.max(1, top[0].critical_containers);
+
+    list.innerHTML = top.map(z => {
+      const name = (z.zone || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+      const pct = (z.critical_containers / max) * 100;
+      const barColor = z.critical_containers > 50 ? 'bg-eco-danger'
+                     : z.critical_containers > 10 ? 'bg-eco-warning'
+                     : 'bg-eco-info';
+      return `
+        <li class="flex items-center gap-2 text-xs">
+          <span class="w-32 truncate text-eco-text-primary">${name}</span>
+          <div class="flex-1 h-2 bg-eco-bg-header rounded-full overflow-hidden">
+            <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
+          </div>
+          <span class="w-10 text-right text-eco-text-secondary">${z.critical_containers}</span>
+        </li>`;
+    }).join('');
+  }
+
+  // ── Fill level histogram ──────────────────────────────────────────
+  async function loadHistogram() {
+    try {
+      const res = await fetch(`${API}/api/v1/containers/readings`);
+      if (!res.ok) return;
+      const containers: any[] = await res.json();
+
+      // 10 buckets of 10%
+      const buckets = new Array(10).fill(0);
+      for (const c of containers) {
+        const idx = Math.min(9, Math.floor(c.fill_level * 10));
+        buckets[idx]++;
+      }
+      const max = Math.max(1, ...buckets);
+
+      const el = document.getElementById('histogram')!;
+      // Each bucket is a vertical bar; color shifts from green to red
+      el.innerHTML = buckets.map((count, i) => {
+        const heightPct = (count / max) * 100;
+        const color = i >= 8 ? 'bg-eco-danger'
+                    : i >= 5 ? 'bg-eco-warning'
+                    : 'bg-eco-green';
+        const range = `${i * 10}-${(i + 1) * 10}%`;
+        return `
+          <div class="flex-1 flex flex-col items-center gap-1 group min-w-0">
+            <span class="text-[10px] text-eco-text-secondary opacity-0 group-hover:opacity-100 transition-opacity">${count.toLocaleString('es-MX')}</span>
+            <div class="w-full ${color} rounded-t" style="height:${heightPct}%" title="${range}: ${count.toLocaleString('es-MX')} contenedores"></div>
+            <span class="text-[10px] text-eco-text-secondary">${i * 10}</span>
+          </div>`;
+      }).join('');
+    } catch {}
+  }
+
+  // ── Fleet status donut ────────────────────────────────────────────
+  async function loadFleetDonut() {
+    try {
+      const res = await fetch(`${API}/api/v1/trucks/`);
+      if (!res.ok) return;
+      const trucks: any[] = await res.json();
+
+      const counts: Record<string, number> = {
+        en_route: 0, collecting: 0, returning: 0, idle: 0, offline: 0,
+      };
+      for (const t of trucks) {
+        if (t.status in counts) counts[t.status]++;
+        else counts.offline++;
+      }
+
+      const total = trucks.length || 1;
+      const segments = [
+        { key: 'en_route',   label: 'En ruta',       color: '#3b82f6', count: counts.en_route },
+        { key: 'collecting', label: 'Recolectando',  color: '#f59e0b', count: counts.collecting },
+        { key: 'returning',  label: 'Regresando',    color: '#64748b', count: counts.returning },
+        { key: 'idle',       label: 'En depósito',   color: '#16a34a', count: counts.idle },
+        { key: 'offline',    label: 'Desconectado',  color: '#94a3b8', count: counts.offline },
+      ].filter(s => s.count > 0);
+
+      // SVG donut: cumulative dasharray on a single circle
+      const svg = document.getElementById('fleet-donut')!;
+      const radius = 36;
+      const circumference = 2 * Math.PI * radius;
+
+      let offset = 0;
+      const circles = segments.map(s => {
+        const len = (s.count / total) * circumference;
+        const c = `<circle cx="50" cy="50" r="${radius}" fill="none"
+          stroke="${s.color}" stroke-width="14"
+          stroke-dasharray="${len} ${circumference - len}"
+          stroke-dashoffset="${-offset}"
+          transform="rotate(-90 50 50)" />`;
+        offset += len;
+        return c;
+      }).join('');
+
+      svg.innerHTML = `
+        ${circles}
+        <text x="50" y="48" text-anchor="middle" font-size="18" font-weight="700" fill="#e2e8f0">${total}</text>
+        <text x="50" y="62" text-anchor="middle" font-size="8" fill="#94a3b8">camiones</text>
+      `;
+
+      const legend = document.getElementById('fleet-legend')!;
+      legend.innerHTML = segments.map(s => {
+        const pct = Math.round((s.count / total) * 100);
+        return `
+          <li class="flex items-center justify-between gap-2">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-sm" style="background:${s.color}"></span>
+              <span class="text-eco-text-primary">${s.label}</span>
+            </span>
+            <span class="text-eco-text-secondary">${s.count} · ${pct}%</span>
+          </li>`;
+      }).join('');
+    } catch {}
+  }
+
+  // ── Predictions binned per hour ───────────────────────────────────
+  async function loadPredictionsBars() {
+    try {
+      const res = await fetch(`${API}/api/v1/predictions/`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const preds: any[] = data.predictions || [];
+
+      // Bin by estimated hours-to-full into 24 1-hour buckets
+      const bins = new Array(24).fill(0);
+      for (const p of preds) {
+        const h = p.estimated_hours_to_full;
+        if (h !== null && h >= 0 && h < 24) {
+          bins[Math.floor(h)]++;
+        }
+      }
+      const max = Math.max(1, ...bins);
+
+      const el = document.getElementById('predictions-bars')!;
+      el.innerHTML = bins.map((count, i) => {
+        const heightPct = (count / max) * 100;
+        const color = i < 6 ? 'bg-eco-danger'
+                    : i < 12 ? 'bg-eco-warning'
+                    : 'bg-eco-info';
+        return `
+          <div class="flex-1 flex flex-col items-center justify-end gap-0.5 group min-w-0">
+            <span class="text-[9px] text-eco-text-secondary opacity-0 group-hover:opacity-100">${count}</span>
+            <div class="w-full ${color} rounded-t" style="height:${heightPct}%" title="${i}h: ${count} contenedores"></div>
+            ${i % 4 === 0 ? `<span class="text-[9px] text-eco-text-secondary">${i}h</span>` : '<span class="text-[9px] opacity-0">·</span>'}
+          </div>`;
+      }).join('');
+    } catch {}
+  }
+
+  // ── Time-series line charts (24h history) ─────────────────────────
+  async function loadHistoryCharts() {
+    try {
+      const res = await fetch(`${API}/api/v1/metrics/history?hours=24`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const snapshots: any[] = data.snapshots || [];
+
+      if (snapshots.length === 0) {
+        renderEmptyChart('chart-co2', 'Sin datos históricos aún (esperando snapshots…)');
+        renderEmptyChart('chart-critical', 'Sin datos históricos aún (esperando snapshots…)');
+        setText('hist-co2-summary', '0 puntos');
+        setText('hist-crit-summary', '0 puntos');
+        return;
+      }
+
+      // CO2 chart (filled area + line, green)
+      const co2Series = snapshots.map(s => ({ t: new Date(s.timestamp).getTime(), v: s.co2_avoided_kg }));
+      renderLineChart('chart-co2', co2Series, '#16a34a');
+      const co2First = co2Series[0].v;
+      const co2Last = co2Series[co2Series.length - 1].v;
+      const co2Delta = co2Last - co2First;
+      const co2Trend = co2Delta >= 0 ? '↑' : '↓';
+      setText('hist-co2-summary', `${snapshots.length} puntos · ${co2Trend} ${Math.abs(co2Delta).toFixed(1)} kg`);
+
+      // Critical chart (red)
+      const critSeries = snapshots.map(s => ({ t: new Date(s.timestamp).getTime(), v: s.critical_containers }));
+      renderLineChart('chart-critical', critSeries, '#ef4444');
+      const critLast = critSeries[critSeries.length - 1].v;
+      const critFirst = critSeries[0].v;
+      const critDelta = critLast - critFirst;
+      const critTrend = critDelta >= 0 ? '↑' : '↓';
+      setText('hist-crit-summary', `${snapshots.length} puntos · ${critTrend} ${Math.abs(critDelta)}`);
+    } catch {}
+  }
+
+  function renderEmptyChart(svgId: string, msg: string) {
+    const svg = document.getElementById(svgId)!;
+    svg.innerHTML = `<text x="300" y="100" text-anchor="middle" fill="#94a3b8" font-size="12">${msg}</text>`;
+  }
+
+  function renderLineChart(svgId: string, series: { t: number; v: number }[], color: string) {
+    const svg = document.getElementById(svgId)!;
+    if (series.length < 2) {
+      renderEmptyChart(svgId, 'Necesitamos al menos 2 puntos para graficar');
+      return;
+    }
+
+    const W = 600;
+    const H = 200;
+    const PADDING_LEFT = 36;
+    const PADDING_RIGHT = 12;
+    const PADDING_TOP = 12;
+    const PADDING_BOTTOM = 22;
+    const plotW = W - PADDING_LEFT - PADDING_RIGHT;
+    const plotH = H - PADDING_TOP - PADDING_BOTTOM;
+
+    const tMin = series[0].t;
+    const tMax = series[series.length - 1].t;
+    const tRange = tMax - tMin || 1;
+
+    const vMin = 0; // anchor at 0 for honest visual
+    const vMax = Math.max(1, ...series.map(s => s.v));
+    const vRange = vMax - vMin || 1;
+
+    const x = (t: number) => PADDING_LEFT + ((t - tMin) / tRange) * plotW;
+    const y = (v: number) => PADDING_TOP + plotH - ((v - vMin) / vRange) * plotH;
+
+    // Y-axis grid: 4 lines
+    const gridLines: string[] = [];
+    const gridLabels: string[] = [];
+    for (let i = 0; i <= 4; i++) {
+      const yPos = PADDING_TOP + (plotH * i) / 4;
+      const yVal = vMax - (vRange * i) / 4;
+      gridLines.push(
+        `<line x1="${PADDING_LEFT}" y1="${yPos}" x2="${W - PADDING_RIGHT}" y2="${yPos}" stroke="#1e293b" stroke-width="1" />`,
+      );
+      gridLabels.push(
+        `<text x="${PADDING_LEFT - 6}" y="${yPos + 3}" text-anchor="end" font-size="9" fill="#64748b">${yVal.toFixed(yVal >= 100 ? 0 : 1)}</text>`,
+      );
+    }
+
+    // X-axis labels: first, mid, last timestamp
+    const fmtTime = (ms: number) =>
+      new Date(ms).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    const xLabels = [
+      `<text x="${PADDING_LEFT}" y="${H - 6}" font-size="9" fill="#64748b">${fmtTime(tMin)}</text>`,
+      `<text x="${PADDING_LEFT + plotW / 2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#64748b">${fmtTime((tMin + tMax) / 2)}</text>`,
+      `<text x="${W - PADDING_RIGHT}" y="${H - 6}" text-anchor="end" font-size="9" fill="#64748b">${fmtTime(tMax)}</text>`,
+    ];
+
+    // Line path + filled area
+    const line = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${x(s.t).toFixed(1)} ${y(s.v).toFixed(1)}`).join(' ');
+    const area = `${line} L ${x(series[series.length - 1].t).toFixed(1)} ${y(vMin).toFixed(1)} L ${x(series[0].t).toFixed(1)} ${y(vMin).toFixed(1)} Z`;
+
+    svg.innerHTML = `
+      ${gridLines.join('')}
+      ${gridLabels.join('')}
+      <path d="${area}" fill="${color}" fill-opacity="0.12" />
+      <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+      ${xLabels.join('')}
+    `;
+  }
+
+  // ── Bootstrap ─────────────────────────────────────────────────────
+  function refreshAll() {
+    loadCurrent();
+    loadHistogram();
+    loadFleetDonut();
+    loadPredictionsBars();
+    loadHistoryCharts();
+  }
+
+  refreshAll();
+
+  // History rebuilds every minute (snapshots arrive every 5 min anyway).
+  setInterval(loadHistoryCharts, 60_000);
+  // Live blocks refresh every 20s.
+  setInterval(() => {
+    loadCurrent();
+    loadFleetDonut();
+    loadPredictionsBars();
+  }, 20_000);
+  // Histogram is the heaviest (10K payload) — refresh slower.
+  setInterval(loadHistogram, 60_000);
+</script>
