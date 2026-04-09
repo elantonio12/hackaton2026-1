@@ -16,6 +16,7 @@ from app.models.schemas import (
     SensorInfo,
     SensorPayload,
     SensorRegistration,
+    SensorUpdate,
 )
 
 router = APIRouter()
@@ -143,3 +144,45 @@ async def receive_sensor_reading(
         "fill_level": reading.fill_level,
         "height_cm": payload.height_cm,
     }
+
+# ---------------------------------------------------------------------------
+# Sensor CRUD
+# ---------------------------------------------------------------------------
+
+@router.get("/registry/{sensor_id}", response_model=SensorInfo)
+async def get_sensor(sensor_id: str, db: AsyncSession = Depends(get_db)):
+    """Obtener detalle de un sensor por ID."""
+    result = await db.execute(select(Sensor).where(Sensor.sensor_id == sensor_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sensor no encontrado")
+    return row.to_dict()
+
+
+@router.patch("/registry/{sensor_id}", response_model=SensorInfo)
+async def update_sensor(
+    sensor_id: str, updates: SensorUpdate, db: AsyncSession = Depends(get_db)
+):
+    """Actualizar campos de un sensor (zona, coordenadas, status)."""
+    result = await db.execute(select(Sensor).where(Sensor.sensor_id == sensor_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sensor no encontrado")
+    for field, value in updates.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    await db.commit()
+    await db.refresh(row)
+    return row.to_dict()
+
+
+@router.delete("/registry/{sensor_id}")
+async def delete_sensor(sensor_id: str, db: AsyncSession = Depends(get_db)):
+    """Soft delete: desactiva el sensor sin borrar su historial."""
+    result = await db.execute(select(Sensor).where(Sensor.sensor_id == sensor_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sensor no encontrado")
+    row.activo = False
+    row.status = "inactivo"
+    await db.commit()
+    return {"status": "deactivated", "id": sensor_id}

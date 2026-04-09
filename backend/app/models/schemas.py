@@ -27,8 +27,7 @@ class Collector(collectorBase):
     created_at: datetime
     updated_at: datetime
 
-    class config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class SensorPayload(BaseModel):
     """What a physical sensor sends."""
@@ -107,6 +106,19 @@ class ModelStatus(BaseModel):
     loss: float | None = None
     readings_since_last_train: int
     next_retrain_in: int
+
+
+# ---------------------------------------------------------------------------
+# Sensor CRUD
+# ---------------------------------------------------------------------------
+
+class SensorUpdate(BaseModel):
+    """Actualizacion parcial de un sensor registrado."""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    zone: Optional[str] = None
+    activo: Optional[bool] = None
+    status: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
