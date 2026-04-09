@@ -21,7 +21,7 @@ import logging
 import math
 import random
 from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sklearn.neural_network import MLPRegressor
 
@@ -307,8 +307,7 @@ def register_optimized_route(optimized_routes: list) -> None:
     now = datetime.now(timezone.utc)
     dow = now.weekday()
 
-    from datetime import timedelta as td
-    cdmx_now = now - td(hours=6)
+    cdmx_now = now - timedelta(hours=6)
     start_hour = cdmx_now.hour + cdmx_now.minute / 60.0
 
     for route in optimized_routes:
@@ -379,10 +378,8 @@ def predict_truck_eta(
     Predice la ETA del camión a un contenedor específico.
     Retorna minutos desde inicio de ruta + hora estimada de llegada.
     """
-    from datetime import timedelta as td
-
     now = datetime.now(timezone.utc)
-    cdmx_now = now - td(hours=6)
+    cdmx_now = now - timedelta(hours=6)
     start_hour = ZONE_START_HOURS.get(zone, 8)
     dow = cdmx_now.weekday()
 
@@ -404,7 +401,7 @@ def predict_truck_eta(
     route_start = cdmx_now.replace(
         hour=start_hour, minute=0, second=0, microsecond=0
     )
-    arrival_time = route_start + td(minutes=eta_minutes)
+    arrival_time = route_start + timedelta(minutes=eta_minutes)
 
     return {
         "container_id": container_id,
@@ -413,7 +410,7 @@ def predict_truck_eta(
         "total_stops": total_stops,
         "eta_minutes_from_route_start": eta_minutes,
         "estimated_arrival_time": arrival_time.strftime("%H:%M"),
-        "estimated_arrival_datetime": (arrival_time + td(hours=6)).isoformat(),  # UTC
+        "estimated_arrival_datetime": (arrival_time + timedelta(hours=6)).isoformat(),  # UTC
         "model_trained": truck_predictor.is_trained,
         "confidence": "high" if truck_predictor.is_trained else "low (fallback lineal)",
     }

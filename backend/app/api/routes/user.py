@@ -6,6 +6,7 @@ GET  /api/v1/user/container/{id}      → Nivel de llenado del contenedor privad
 POST /api/v1/user/report              → Reportar un problema
 GET  /api/v1/user/active-trucks       → Camiones activos en la zona
 GET  /api/v1/user/truck-eta           → ETA del camión a un contenedor específico
+GET  /api/v1/user/reports             → Consultar reportes de problemas
 """
 
 from datetime import datetime, timezone, timedelta
