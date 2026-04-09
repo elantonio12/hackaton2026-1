@@ -8,6 +8,18 @@ class Settings(BaseSettings):
     watsonx_url: str = "https://us-south.ml.cloud.ibm.com"
     allowed_origins: list[str] = ["*"]
 
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
+    # JWT
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_minutes: int = 60 * 24  # 24 hours
+
+    # Sensor API key
+    sensor_api_key: str = "ecoruta-sensor-secret-2026"
+
     class Config:
         env_file = ".env"
 
