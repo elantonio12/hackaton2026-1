@@ -18,8 +18,12 @@
     "@tailwindcss/vite": "^4.2.2",
     "@tailwindplus/elements": "^1.0.22",
     "astro": "^6.1.4",
+    "leaflet": "^1.9.4",
     "tailwindcss": "^4.2.2",
     "vite-plugin-pwa": "^1.2.0",
     "workbox-window": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21"
   }
 }

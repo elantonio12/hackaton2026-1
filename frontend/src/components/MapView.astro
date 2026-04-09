@@ -23,7 +23,6 @@ const {
 } = Astro.props;
 ---
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <div id={id} class={`w-full ${height} rounded-lg z-0`}
   data-center={JSON.stringify(center)}
   data-zoom={zoom}
@@ -32,17 +31,18 @@ const {
 <script>
   /**
    * Initialize all MapView instances on the page.
-   * Exposes window.__maps__ = { [id]: L.map } for scripts to add markers.
+   * Exposes window.__L__ and window.__maps__ = { [id]: L.map } for scripts to add markers.
    */
-  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
+  import L from 'leaflet';
+  import 'leaflet/dist/leaflet.css';
 
   (window as any).__L__ = L;
   (window as any).__maps__ = (window as any).__maps__ || {};
 
-  document.querySelectorAll('[data-center]').forEach((el: any) => {
+  document.querySelectorAll<HTMLElement>('[data-center]').forEach((el) => {
     if ((window as any).__maps__[el.id]) return; // already init
-    const center = JSON.parse(el.dataset.center);
-    const zoom = parseInt(el.dataset.zoom) || 12;
+    const center = JSON.parse(el.dataset.center!);
+    const zoom = parseInt(el.dataset.zoom!) || 12;
 
     const map = L.map(el.id, { zoomControl: true }).setView(center, zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
