@@ -302,7 +302,17 @@ import { citizenNav } from '../../lib/nav';
       seen.add(c.container_id);
       const color = markerColor(c.fill_level);
       const pct = Math.round(c.fill_level * 100);
-      const popup = `<b>${c.container_id}</b><br/>Nivel: ${pct}%`;
+      const reportUrl = `/usuario/reportes?container=${encodeURIComponent(c.container_id)}`;
+      const popup = `
+        <div style="min-width:160px">
+          <div style="font-weight:600;margin-bottom:2px">${c.container_id}</div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:8px">Nivel: ${pct}%</div>
+          <a href="${reportUrl}"
+             style="display:inline-block;background:#16a34a;color:white;padding:6px 10px;
+                    border-radius:6px;font-size:12px;font-weight:500;text-decoration:none">
+            Reportar este contenedor
+          </a>
+        </div>`;
       latlngs.push([c.latitude, c.longitude]);
 
       const existing = markerIndex.get(c.container_id);
@@ -352,22 +362,35 @@ import { citizenNav } from '../../lib/nav';
       return;
     }
 
-    const sorted = [...zoneContainers].sort((a, b) => b.fill_level - a.fill_level);
+    // Show top 20 containers in the zone (sorted by fill level, most full first).
+    // Each row links to the report form for that specific container.
+    const sorted = [...zoneContainers].sort((a, b) => b.fill_level - a.fill_level).slice(0, 20);
     list.innerHTML = sorted.map(c => {
       const pct = Math.round(c.fill_level * 100);
       const barColor = pct >= 80 ? 'bg-eco-danger' : pct >= 50 ? 'bg-eco-warning' : 'bg-eco-green';
       const label = pct >= 80 ? 'Lleno' : pct >= 50 ? 'Medio' : 'OK';
       const labelColor = pct >= 80 ? 'text-eco-danger' : pct >= 50 ? 'text-eco-warning' : 'text-eco-green';
+      const href = `/usuario/reportes?container=${encodeURIComponent(c.container_id)}`;
       return `
-        <li class="flex items-center gap-3 bg-eco-bg-header rounded-lg px-3 py-2">
-          <span class="text-sm font-medium text-eco-text-primary w-20 shrink-0">${c.container_id}</span>
-          <div class="flex-1 h-1.5 bg-eco-border rounded-full overflow-hidden">
-            <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
-          </div>
-          <span class="text-xs text-eco-text-secondary w-8 text-right">${pct}%</span>
-          <span class="text-xs font-medium ${labelColor} w-12 text-right">${label}</span>
+        <li>
+          <a href="${href}"
+             class="flex items-center gap-3 bg-eco-bg-header hover:bg-eco-bg-panel rounded-lg px-3 py-2 transition-colors">
+            <span class="text-sm font-medium text-eco-text-primary w-24 shrink-0 truncate">${c.container_id}</span>
+            <div class="flex-1 h-1.5 bg-eco-border rounded-full overflow-hidden">
+              <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
+            </div>
+            <span class="text-xs text-eco-text-secondary w-8 text-right">${pct}%</span>
+            <span class="text-xs font-medium ${labelColor} w-12 text-right">${label}</span>
+          </a>
         </li>`;
     }).join('');
+
+    if (zoneContainers.length > 20) {
+      list.innerHTML += `
+        <li class="text-xs text-eco-text-secondary text-center pt-1">
+          Mostrando los 20 más llenos de ${zoneContainers.length} contenedores en tu alcaldía.
+        </li>`;
+    }
   }
 
   // Load data

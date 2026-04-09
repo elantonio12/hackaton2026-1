@@ -75,10 +75,28 @@ class OptimizedRoute(BaseModel):
 
 
 class CitizenReport(BaseModel):
-    latitude: float
-    longitude: float
+    """Citizen-initiated report about a specific container.
+
+    Reports are tied to a `container_id` — the citizen taps a container
+    they can see in their map, and the backend validates they're actually
+    physically near it via `user_latitude`/`user_longitude`.
+    """
+    container_id: str
+    problem_type: str  # desbordado | dañado | basura_fuera | mal_olor | obstruido | otro
     description: str
+    user_latitude: float
+    user_longitude: float
+
+
+class CitizenReportOut(BaseModel):
+    """Shape returned by GET /reports/citizen (no raw coordinates exposed)."""
+    id: int
+    container_id: str
     zone: str
+    problem_type: str
+    description: str
+    status: str
+    created_at: str
 
 
 class ContainerPrediction(BaseModel):
