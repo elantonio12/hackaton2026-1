@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 60 * 24  # 24 hours
 
+    # Resend (transactional email)
+    resend_api_key: str = ""
+    resend_from_email: str = "EcoRuta <noreply@mail.syle.studio>"
+    frontend_url: str = "https://hackaton2026.syle.studio"
+
     # Sensor API key
     sensor_api_key: str = "ecoruta-sensor-secret-2026"
 
