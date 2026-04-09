@@ -1,6 +1,5 @@
 ---
 import '../styles/global.css';
-import '@tailwindplus/elements';
 
 interface Props {
   title: string;
@@ -32,6 +31,10 @@ const { title } = Astro.props;
       }
       setAppHeight();
       window.addEventListener('resize', setAppHeight);
+    </script>
+    <!-- Tailwind Plus Elements: client-side custom elements (el-dialog, el-dropdown, etc.) -->
+    <script>
+      import '@tailwindplus/elements';
     </script>
   </head>
   <body class="h-app overflow-hidden safe-bottom">

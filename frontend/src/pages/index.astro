@@ -1,6 +1,5 @@
 ---
 import '../styles/global.css';
-import '@tailwindplus/elements';
 import Nav from '../components/landing/Nav.astro';
 import Hero from '../components/landing/Hero.astro';
 import Problem from '../components/landing/Problem.astro';
@@ -25,6 +24,9 @@ import Footer from '../components/landing/Footer.astro';
     <meta property="og:description" content="Sistema de gestion de residuos con IoT, IA y rutas dinamicas." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>EcoRuta — Recoleccion Inteligente de Residuos para CDMX</title>
+    <script>
+      import '@tailwindplus/elements';
+    </script>
   </head>
 
   <body class="bg-white text-gray-900 font-sans antialiased">
