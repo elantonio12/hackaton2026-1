@@ -93,25 +93,9 @@ import { adminNav } from '../../lib/nav';
           </div>
           <div>
             <label class="block text-xs font-medium text-eco-text-secondary mb-1">Alcaldia</label>
-            <select id="f-zone" class="input" required>
-              <option value="">Selecciona...</option>
-              <option value="iztapalapa">Iztapalapa</option>
-              <option value="gustavo_a_madero">Gustavo A. Madero</option>
-              <option value="alvaro_obregon">Alvaro Obregon</option>
-              <option value="tlalpan">Tlalpan</option>
-              <option value="coyoacan">Coyoacan</option>
-              <option value="cuauhtemoc">Cuauhtemoc</option>
-              <option value="xochimilco">Xochimilco</option>
-              <option value="venustiano_carranza">Venustiano Carranza</option>
-              <option value="benito_juarez">Benito Juarez</option>
-              <option value="azcapotzalco">Azcapotzalco</option>
-              <option value="miguel_hidalgo">Miguel Hidalgo</option>
-              <option value="iztacalco">Iztacalco</option>
-              <option value="tlahuac">Tlahuac</option>
-              <option value="la_magdalena_contreras">La Magdalena Contreras</option>
-              <option value="cuajimalpa_de_morelos">Cuajimalpa de Morelos</option>
-              <option value="milpa_alta">Milpa Alta</option>
-            </select>
+            <div id="f-zone-display" class="input bg-eco-bg-header text-eco-text-secondary cursor-not-allowed">
+              Detectando segun coordenadas...
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -255,6 +239,17 @@ import { adminNav } from '../../lib/nav';
     }
   }
 
+  // Holds the alcaldia derived from current depot coordinates.
+  let detectedZone: string | null = null;
+
+  function setZoneDisplay(label: string, isError = false) {
+    const el = $('f-zone-display');
+    el.textContent = label;
+    el.className = isError
+      ? 'input bg-eco-danger/10 text-eco-danger cursor-not-allowed'
+      : 'input bg-eco-bg-header text-eco-text-primary cursor-not-allowed';
+  }
+
   function openCreateModal() {
     editingId = null;
     $('modal-title').textContent = 'Nuevo camion';
@@ -274,6 +269,8 @@ import { adminNav } from '../../lib/nav';
     ($('f-recolector-email') as HTMLInputElement).required = true;
     ($('f-truck-id') as HTMLInputElement).disabled = false;
 
+    detectedZone = null;
+    setZoneDisplay('Detectando segun coordenadas...');
     $('modal-error').classList.add('hidden');
     $('truck-modal').classList.remove('hidden');
   }
@@ -286,10 +283,11 @@ import { adminNav } from '../../lib/nav';
     ($('f-truck-id') as HTMLInputElement).value = t.id;
     ($('f-truck-id') as HTMLInputElement).disabled = true;
     ($('f-name') as HTMLInputElement).value = t.name;
-    ($('f-zone') as HTMLSelectElement).value = t.zone;
     ($('f-capacity') as HTMLInputElement).value = String(t.capacity_m3);
     ($('f-lat') as HTMLInputElement).value = String(t.depot_lat);
     ($('f-lon') as HTMLInputElement).value = String(t.depot_lon);
+    detectedZone = t.zone;
+    setZoneDisplay(t.zone);
 
     // Hide recolector fields on edit (recolector cannot be changed via PATCH)
     $('recolector-fields').classList.add('hidden');
@@ -312,13 +310,17 @@ import { adminNav } from '../../lib/nav';
 
     const id = ($('f-truck-id') as HTMLInputElement).value.trim();
     const name = ($('f-name') as HTMLInputElement).value.trim();
-    const zone = ($('f-zone') as HTMLSelectElement).value;
     const capacity_m3 = parseFloat(($('f-capacity') as HTMLInputElement).value);
     const depot_lat = parseFloat(($('f-lat') as HTMLInputElement).value);
     const depot_lon = parseFloat(($('f-lon') as HTMLInputElement).value);
 
-    if (!id || !name || !zone || isNaN(capacity_m3) || isNaN(depot_lat) || isNaN(depot_lon)) {
+    if (!id || !name || isNaN(capacity_m3) || isNaN(depot_lat) || isNaN(depot_lon)) {
       errBox.textContent = 'Completa todos los campos del camion';
+      errBox.classList.remove('hidden');
+      return;
+    }
+    if (!detectedZone) {
+      errBox.textContent = 'El deposito esta fuera de CDMX';
       errBox.classList.remove('hidden');
       return;
     }
@@ -329,7 +331,8 @@ import { adminNav } from '../../lib/nav';
 
     try {
       if (editingId) {
-        await apiUpdateTruck(editingId, { name, zone, capacity_m3, depot_lat, depot_lon });
+        // Backend re-derives zone from depot coordinates; we don't send it.
+        await apiUpdateTruck(editingId, { name, capacity_m3, depot_lat, depot_lon });
         showBanner(`Camion ${editingId} actualizado`);
       } else {
         const recolector_name = ($('f-recolector-name') as HTMLInputElement).value.trim();
@@ -340,7 +343,6 @@ import { adminNav } from '../../lib/nav';
         const result = await apiCreateTruck({
           id,
           name,
-          zone,
           capacity_m3,
           depot_lat,
           depot_lon,
@@ -375,20 +377,22 @@ import { adminNav } from '../../lib/nav';
     }
   }
 
-  // Auto-detect alcaldia from depot coordinates
+  // Auto-detect alcaldia from depot coordinates.
+  // Updates `detectedZone` (used at submit) and the read-only display.
   async function autoDetectZone() {
     const lat = parseFloat(($('f-lat') as HTMLInputElement).value);
     const lon = parseFloat(($('f-lon') as HTMLInputElement).value);
     if (isNaN(lat) || isNaN(lon)) return;
+    setZoneDisplay('Detectando...');
     try {
       const zone = await apiLookupAlcaldia(lat, lon);
-      const select = $('f-zone') as HTMLSelectElement;
       if (zone) {
-        select.value = zone;
+        detectedZone = zone;
+        setZoneDisplay(zone);
         $('modal-error').classList.add('hidden');
       } else {
-        $('modal-error').textContent = 'El deposito esta fuera de CDMX';
-        $('modal-error').classList.remove('hidden');
+        detectedZone = null;
+        setZoneDisplay('Fuera de CDMX', true);
       }
     } catch {
       // Silent: backend will catch on submit anyway

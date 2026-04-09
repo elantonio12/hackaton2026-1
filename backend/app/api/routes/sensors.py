@@ -135,11 +135,10 @@ async def register_sensor(
     """Register or upsert a sensor. Admin (via JWT) and the simulator
     (via sensor api key) both share this endpoint.
 
-    Validates that (latitude, longitude) actually falls inside the
-    declared zone using the bundled CDMX alcaldia polygons. If the
-    point is outside CDMX, 422. If it's inside but in a different
-    alcaldia, 422 with the suggested zone in the detail (so the
-    frontend can offer to switch).
+    The `zone` field is always derived from the coordinates via
+    point-in-polygon — even if the caller provided a value. This way
+    we have a single source of truth and the admin UI doesn't have to
+    pick a zone manually. If the point is outside CDMX, 422.
     """
     from app.services.geo import find_alcaldia
 
@@ -149,16 +148,12 @@ async def register_sensor(
             status_code=422,
             detail="Las coordenadas estan fuera de la Ciudad de Mexico",
         )
-    if actual_zone != reg.zone:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Las coordenadas pertenecen a '{actual_zone}', "
-                f"no a '{reg.zone}'. Corrige el campo zone o las coordenadas."
-            ),
-        )
 
+    # Always use the polygon-derived zone, ignoring any value the
+    # caller may have sent.
     data = reg.model_dump()
+    data["zone"] = actual_zone
+
     stmt = pg_insert(Sensor).values(**data)
     stmt = stmt.on_conflict_do_update(
         index_elements=["sensor_id"],
@@ -166,7 +161,8 @@ async def register_sensor(
     )
     await db.execute(stmt)
     await db.commit()
-    return reg
+    # Echo back the actual zone we stored so the caller knows
+    return {**data}
 
 
 @router.get("/registry", response_model=list[SensorInfo])

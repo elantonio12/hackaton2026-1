@@ -164,21 +164,15 @@ async def create_truck(
             detail=f"Ya existe un camion con id {payload.id}",
         )
 
-    # Validate that the depot coordinates fall inside the declared zone.
+    # Always derive zone from depot coordinates via point-in-polygon.
+    # The admin UI doesn't pick a zone manually — coordinates are the
+    # only spatial input.
     from app.services.geo import find_alcaldia
-    actual_zone = find_alcaldia(payload.depot_lat, payload.depot_lon)
-    if actual_zone is None:
+    derived_zone = find_alcaldia(payload.depot_lat, payload.depot_lon)
+    if derived_zone is None:
         raise HTTPException(
             status_code=422,
             detail="El deposito esta fuera de la Ciudad de Mexico",
-        )
-    if actual_zone != payload.zone:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"El deposito pertenece a '{actual_zone}', "
-                f"no a '{payload.zone}'. Corrige zone o las coordenadas."
-            ),
         )
 
     email = payload.recolector_email.lower()
@@ -212,7 +206,7 @@ async def create_truck(
     new_truck = Truck(
         id=payload.id,
         name=payload.name,
-        zone=payload.zone,
+        zone=derived_zone,
         capacity_m3=payload.capacity_m3,
         current_load_m3=0.0,
         depot_lat=payload.depot_lat,
@@ -243,39 +237,31 @@ async def patch_truck(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Update mutable fields of a truck (name, zone, depot, capacity, status).
+    """Update mutable fields of a truck (name, depot, capacity, status).
 
-    If depot coordinates or zone change, re-validate the depot vs the
-    polygon-based alcaldia. Editing only name/capacity/status skips the
-    geo check.
+    If depot coordinates change, the zone is recomputed from the new
+    coordinates via point-in-polygon. The admin never picks a zone
+    explicitly. If the new depot is outside CDMX, 422.
     """
     truck = await _get_truck(db, truck_id)
     if not truck:
         raise HTTPException(status_code=404, detail="Camion no encontrado")
 
     patch = updates.model_dump(exclude_unset=True)
+    # Drop any zone the caller may have sent — we always derive it.
+    patch.pop("zone", None)
 
-    # Geo re-validation if any spatial field is being touched
-    spatial_fields = {"depot_lat", "depot_lon", "zone"}
-    if spatial_fields & patch.keys():
+    if "depot_lat" in patch or "depot_lon" in patch:
         new_lat = patch.get("depot_lat", truck.depot_lat)
         new_lon = patch.get("depot_lon", truck.depot_lon)
-        new_zone = patch.get("zone", truck.zone)
         from app.services.geo import find_alcaldia
-        actual_zone = find_alcaldia(new_lat, new_lon)
-        if actual_zone is None:
+        derived_zone = find_alcaldia(new_lat, new_lon)
+        if derived_zone is None:
             raise HTTPException(
                 status_code=422,
                 detail="El deposito esta fuera de la Ciudad de Mexico",
             )
-        if actual_zone != new_zone:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"El deposito pertenece a '{actual_zone}', "
-                    f"no a '{new_zone}'. Corrige zone o las coordenadas."
-                ),
-            )
+        patch["zone"] = derived_zone
 
     for field, value in patch.items():
         setattr(truck, field, value)

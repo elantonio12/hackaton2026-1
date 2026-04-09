@@ -251,7 +251,8 @@ export async function apiOptimizeRoutes(): Promise<{ generated: number; skipped:
 export interface TruckCreatePayload {
   id: string;
   name: string;
-  zone: string;
+  /** Optional — backend derives from depot coordinates if omitted. */
+  zone?: string;
   capacity_m3: number;
   depot_lat: number;
   depot_lon: number;
@@ -321,7 +322,8 @@ export interface SensorRegistrationPayload {
   container_id: string;
   latitude: number;
   longitude: number;
-  zone: string;
+  /** Optional — backend derives from coordinates if omitted. */
+  zone?: string;
 }
 
 export interface SensorUpdatePayload {

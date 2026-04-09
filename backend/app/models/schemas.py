@@ -37,12 +37,18 @@ class SensorPayload(BaseModel):
 
 
 class SensorRegistration(BaseModel):
-    """Register a sensor to a container location."""
+    """Register a sensor to a container location.
+
+    `zone` is optional: when omitted, the backend derives it from the
+    coordinates via point-in-polygon over the CDMX alcaldias. The
+    admin frontend never sends it — only the simulator does, for
+    backwards compat with the seed flow.
+    """
     sensor_id: str
     container_id: str
     latitude: float
     longitude: float
-    zone: str
+    zone: Optional[str] = None
 
 
 class SensorInfo(SensorRegistration):
@@ -224,10 +230,16 @@ class TruckLocationUpdate(BaseModel):
 
 
 class TruckCreate(BaseModel):
-    """Admin payload to create a new truck and its assigned collector."""
+    """Admin payload to create a new truck and its assigned collector.
+
+    `zone` is optional: when omitted, the backend derives it from the
+    depot coordinates via point-in-polygon. The admin UI doesn't send
+    it — the user only types depot_lat/depot_lon and the alcaldia is
+    computed server-side.
+    """
     id: str  # e.g. TRK-31
     name: str
-    zone: str
+    zone: Optional[str] = None
     capacity_m3: float = 12.0
     depot_lat: float
     depot_lon: float
