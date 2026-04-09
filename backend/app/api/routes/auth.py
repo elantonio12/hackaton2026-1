@@ -1,15 +1,19 @@
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Literal
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Literal
 
 from app.core.config import settings
+from app.db.database import get_db
+from app.db.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +47,6 @@ class UserInfo(BaseModel):
     name: str
     picture: str | None = None
     role: str = "citizen"
-
-# ---------------------------------------------------------------------------
-# In-memory user store (demo)
-# ---------------------------------------------------------------------------
-
-users_db: dict[str, dict] = {}
-email_to_sub: dict[str, str] = {}
 
 # ---------------------------------------------------------------------------
 # Password helpers
@@ -88,16 +85,19 @@ def _decode_jwt(token: str) -> dict:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
+    db: AsyncSession = Depends(get_db),
+) -> User:
     payload = _decode_jwt(credentials.credentials)
-    user = users_db.get(payload.get("sub"))
+    sub = payload.get("sub")
+    result = await db.execute(select(User).where(User.sub == sub))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
     return user
 
 
-async def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    if user.get("role") != "admin":
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requieren permisos de administrador",
@@ -108,25 +108,26 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 # Seed default admin
 # ---------------------------------------------------------------------------
 
-def seed_admin():
+async def seed_admin(db: AsyncSession):
     email = "admin@ecoruta.app"
     sub = f"local|{email}"
-    if sub in users_db:
+    result = await db.execute(select(User).where(User.sub == sub))
+    if result.scalar_one_or_none():
         return
-    now = datetime.now(timezone.utc).isoformat()
-    users_db[sub] = {
-        "sub": sub,
-        "email": email,
-        "name": "Administrador",
-        "picture": None,
-        "role": "admin",
-        "provider": "seed",
-        "email_verified": True,
-        "password_hash": _hash_password("admin123"),
-        "created_at": now,
-        "last_login": now,
-    }
-    email_to_sub[email] = sub
+    now = datetime.now(timezone.utc)
+    db.add(User(
+        sub=sub,
+        email=email,
+        name="Administrador",
+        picture=None,
+        role="admin",
+        provider="seed",
+        email_verified=True,
+        password_hash=_hash_password("admin123"),
+        created_at=now,
+        last_login=now,
+    ))
+    await db.commit()
     logger.info("[Auth] Admin seed: %s / admin123", email)
 
 # ---------------------------------------------------------------------------
@@ -134,62 +135,61 @@ def seed_admin():
 # ---------------------------------------------------------------------------
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest):
-    sub = email_to_sub.get(body.email.lower())
-    if not sub:
+async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == body.email.lower()))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.password_hash:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contrasena incorrectos",
         )
 
-    user = users_db[sub]
-
-    if not user.get("password_hash"):
+    if not _verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contrasena incorrectos",
         )
 
-    if not _verify_password(body.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contrasena incorrectos",
-        )
+    user.last_login = datetime.now(timezone.utc)
+    await db.commit()
 
-    user["last_login"] = datetime.now(timezone.utc).isoformat()
-    access_token = _create_jwt({"sub": sub, "email": user["email"]})
-
-    user_public = {k: v for k, v in user.items() if k != "password_hash"}
-    return TokenResponse(access_token=access_token, user=user_public)
+    access_token = _create_jwt({"sub": user.sub, "email": user.email})
+    return TokenResponse(access_token=access_token, user=user.to_public_dict())
 
 
 @router.post("/invite")
-async def invite_user(body: InviteRequest, admin: dict = Depends(require_admin)):
-    if body.email.lower() in email_to_sub:
+async def invite_user(
+    body: InviteRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.email == body.email.lower()))
+    if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe una cuenta con este correo",
         )
 
     sub = f"local|{body.email.lower()}"
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     temp_password = secrets.token_urlsafe(10)
 
-    users_db[sub] = {
-        "sub": sub,
-        "email": body.email.lower(),
-        "name": body.name,
-        "picture": None,
-        "role": body.role,
-        "provider": "invite",
-        "email_verified": True,
-        "password_hash": _hash_password(temp_password),
-        "created_at": now,
-        "last_login": now,
-    }
-    email_to_sub[body.email.lower()] = sub
+    db.add(User(
+        sub=sub,
+        email=body.email.lower(),
+        name=body.name,
+        picture=None,
+        role=body.role,
+        provider="invite",
+        email_verified=True,
+        password_hash=_hash_password(temp_password),
+        created_at=now,
+        last_login=now,
+    ))
+    await db.commit()
 
-    logger.info("[Auth] User invited: %s (%s) by %s", body.email, body.role, admin["email"])
+    logger.info("[Auth] User invited: %s (%s) by %s", body.email, body.role, admin.email)
 
     return {
         "email": body.email.lower(),
@@ -200,15 +200,15 @@ async def invite_user(body: InviteRequest, admin: dict = Depends(require_admin))
 
 
 @router.get("/verify", response_model=UserInfo)
-async def verify_token(user: dict = Depends(get_current_user)):
-    return user
+async def verify_token(user: User = Depends(get_current_user)):
+    return user.to_public_dict()
 
 
 @router.post("/logout")
-async def logout(user: dict = Depends(get_current_user)):
-    return {"status": "logged_out", "email": user.get("email")}
+async def logout(user: User = Depends(get_current_user)):
+    return {"status": "logged_out", "email": user.email}
 
 
 @router.get("/me", response_model=UserInfo)
-async def me(user: dict = Depends(get_current_user)):
-    return user
+async def me(user: User = Depends(get_current_user)):
+    return user.to_public_dict()

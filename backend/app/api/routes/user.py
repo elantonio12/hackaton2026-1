@@ -1,61 +1,65 @@
 """
 Endpoints para el Usuario Ciudadano - EcoRuta
 =============================================
-GET  /api/v1/user/next-truck          → Próximo camión por zona (horario)
-GET  /api/v1/user/container/{id}      → Nivel de llenado del contenedor privado
-POST /api/v1/user/report              → Reportar un problema
-GET  /api/v1/user/active-trucks       → Camiones activos en la zona
-GET  /api/v1/user/truck-eta           → ETA del camión a un contenedor específico
-GET  /api/v1/user/reports             → Consultar reportes de problemas
+GET  /api/v1/user/next-truck          -> Proximo camion por zona (horario)
+GET  /api/v1/user/container/{id}      -> Nivel de llenado del contenedor privado
+POST /api/v1/user/report              -> Reportar un problema
+GET  /api/v1/user/active-trucks       -> Camiones activos en la zona
+GET  /api/v1/user/truck-eta           -> ETA del camion a un contenedor especifico
+GET  /api/v1/user/reports             -> Consultar reportes de problemas
 """
 
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.routes.containers import container_readings
-from app.api.routes.collectors import collectors_db
+from app.db.database import get_db
+from app.db.models import Collector
+from app.db.models import ContainerReading as ContainerReadingModel
+from app.db.models import ProblemReport
 from app.services.prediction import predict_container
 from app.services.truck_prediction import predict_truck_eta
 
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Zonas válidas
+# Zonas validas
 # ---------------------------------------------------------------------------
 
 VALID_ZONES = {"norte", "centro", "sur"}
 
 # ---------------------------------------------------------------------------
-# Políticas de horarios por zona (CDMX)
+# Politicas de horarios por zona (CDMX)
 # ---------------------------------------------------------------------------
 
 ZONE_SCHEDULES = {
     "norte": {
-        "dias": ["lunes", "miércoles", "viernes"],
+        "dias": ["lunes", "miercoles", "viernes"],
         "hora_inicio": 7,
         "hora_fin": 14,
-        "descripcion": "Zona Norte: recolección lunes, miércoles y viernes de 7:00 a 14:00 hrs",
+        "descripcion": "Zona Norte: recoleccion lunes, miercoles y viernes de 7:00 a 14:00 hrs",
     },
     "centro": {
-        "dias": ["martes", "jueves", "sábado"],
+        "dias": ["martes", "jueves", "sabado"],
         "hora_inicio": 8,
         "hora_fin": 15,
-        "descripcion": "Zona Centro: recolección martes, jueves y sábado de 8:00 a 15:00 hrs",
+        "descripcion": "Zona Centro: recoleccion martes, jueves y sabado de 8:00 a 15:00 hrs",
     },
     "sur": {
         "dias": ["lunes", "jueves"],
         "hora_inicio": 9,
         "hora_fin": 16,
-        "descripcion": "Zona Sur: recolección lunes y jueves de 9:00 a 16:00 hrs",
+        "descripcion": "Zona Sur: recoleccion lunes y jueves de 9:00 a 16:00 hrs",
     },
 }
 
 WEEKDAY_NAMES = {
-    0: "lunes", 1: "martes", 2: "miércoles", 3: "jueves",
-    4: "viernes", 5: "sábado", 6: "domingo",
+    0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves",
+    4: "viernes", 5: "sabado", 6: "domingo",
 }
 
 # ---------------------------------------------------------------------------
@@ -96,7 +100,7 @@ class TruckEtaResponse(BaseModel):
     confidence: str
 
 
-class ProblemReport(BaseModel):
+class ProblemReportRequest(BaseModel):
     container_id: str | None = None
     latitude: float
     longitude: float
@@ -122,7 +126,6 @@ class ActiveTrucksResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _get_next_collection(zone: str) -> dict:
-    """Calcula el próximo día y hora de recolección para una zona."""
     schedule = ZONE_SCHEDULES[zone]
     now = datetime.now(timezone.utc)
     cdmx_now = now - timedelta(hours=6)
@@ -168,17 +171,10 @@ def _get_next_collection(zone: str) -> dict:
 
 def _fill_status(fill_level: float) -> str:
     if fill_level >= 0.9:
-        return "crítico"
+        return "critico"
     elif fill_level >= 0.75:
         return "alto"
     return "normal"
-
-
-# ---------------------------------------------------------------------------
-# Problem reports store
-# ---------------------------------------------------------------------------
-
-problem_reports: list[dict] = []
 
 
 # ---------------------------------------------------------------------------
@@ -187,15 +183,11 @@ problem_reports: list[dict] = []
 
 @router.get("/next-truck", response_model=NextTruckResponse)
 async def get_next_truck(zone: str):
-    """
-    Retorna cuándo pasa el próximo camión de recolección por la zona.
-    Zonas válidas: norte, centro, sur
-    """
     zone = zone.lower()
     if zone not in VALID_ZONES:
         raise HTTPException(
             status_code=400,
-            detail=f"Zona inválida '{zone}'. Usa: norte, centro o sur.",
+            detail=f"Zona invalida '{zone}'. Usa: norte, centro o sur.",
         )
 
     schedule = ZONE_SCHEDULES[zone]
@@ -209,28 +201,27 @@ async def get_next_truck(zone: str):
 
 
 @router.get("/container/{container_id}", response_model=ContainerStatusResponse)
-async def get_container_status(container_id: str):
-    """
-    Retorna el nivel de llenado actual del contenedor privado del usuario
-    más predicción de cuándo se llenará (modelo MLP).
-    """
-    reading = container_readings.get(container_id)
-    if not reading:
+async def get_container_status(container_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ContainerReadingModel).where(ContainerReadingModel.container_id == container_id)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
         raise HTTPException(
             status_code=404,
             detail=f"Contenedor '{container_id}' no encontrado. "
-                   "Verifica que el sensor esté activo y enviando datos.",
+                   "Verifica que el sensor este activo y enviando datos.",
         )
 
     prediction = predict_container(container_id)
 
     return ContainerStatusResponse(
-        container_id=reading.container_id,
-        zone=reading.zone,
-        fill_level=reading.fill_level,
-        fill_level_pct=f"{reading.fill_level * 100:.1f}%",
-        status=_fill_status(reading.fill_level),
-        timestamp=reading.timestamp,
+        container_id=row.container_id,
+        zone=row.zone,
+        fill_level=row.fill_level,
+        fill_level_pct=f"{row.fill_level * 100:.1f}%",
+        status=_fill_status(row.fill_level),
+        timestamp=row.timestamp,
         predicted_fill_24h=prediction["predicted_fill_24h"] if prediction else None,
         estimated_hours_to_full=prediction["estimated_hours_to_full"] if prediction else None,
         estimated_full_at=prediction["estimated_full_at"] if prediction else None,
@@ -243,24 +234,17 @@ async def get_truck_eta(
     stop_order: int,
     total_stops: int,
     distance_to_stop_km: float,
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Predice la hora estimada de llegada (ETA) del camión a un contenedor
-    específico dentro de su ruta, usando el modelo MLP de predicción de rutas.
-
-    Parámetros:
-    - container_id: ID del contenedor (ej. CNT-001)
-    - stop_order: posición de la parada en la ruta (1, 2, 3...)
-    - total_stops: total de paradas en la ruta
-    - distance_to_stop_km: distancia acumulada desde el inicio hasta esta parada
-    """
-    # Obtener zona y nivel de llenado del contenedor si está disponible
-    reading = container_readings.get(container_id)
-    zone = reading.zone if reading else "centro"
-    fill_level = reading.fill_level if reading else 0.5
+    result = await db.execute(
+        select(ContainerReadingModel).where(ContainerReadingModel.container_id == container_id)
+    )
+    row = result.scalar_one_or_none()
+    zone = row.zone if row else "centro"
+    fill_level = row.fill_level if row else 0.5
 
     if zone not in VALID_ZONES:
-        raise HTTPException(status_code=400, detail=f"Zona inválida: {zone}")
+        raise HTTPException(status_code=400, detail=f"Zona invalida: {zone}")
 
     if stop_order < 1 or stop_order > total_stops:
         raise HTTPException(
@@ -281,50 +265,52 @@ async def get_truck_eta(
 
 
 @router.post("/report")
-async def submit_problem_report(report: ProblemReport):
-    """
-    El usuario reporta un problema: camión que no pasó, contenedor lleno,
-    contenedor dañado, mal olor, u otro.
-    """
-    entry = {
-        **report.model_dump(),
-        "id": len(problem_reports) + 1,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": "recibido",
-    }
-    problem_reports.append(entry)
+async def submit_problem_report(
+    report: ProblemReportRequest, db: AsyncSession = Depends(get_db)
+):
+    now = datetime.now(timezone.utc)
+    row = ProblemReport(
+        container_id=report.container_id,
+        latitude=report.latitude,
+        longitude=report.longitude,
+        zone=report.zone,
+        tipo_problema=report.tipo_problema,
+        descripcion=report.descripcion,
+        timestamp=now,
+        status="recibido",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
 
     return {
         "status": "recibido",
-        "reporte_id": entry["id"],
-        "mensaje": "Tu reporte fue registrado. El equipo de EcoRuta lo revisará pronto.",
-        "timestamp": entry["timestamp"],
+        "reporte_id": row.id,
+        "mensaje": "Tu reporte fue registrado. El equipo de EcoRuta lo revisara pronto.",
+        "timestamp": now.isoformat(),
     }
 
 
 @router.get("/active-trucks", response_model=ActiveTrucksResponse)
-async def get_active_trucks(zone: str):
-    """
-    Retorna los camiones recolectores activos en la zona del usuario.
-    """
+async def get_active_trucks(zone: str, db: AsyncSession = Depends(get_db)):
     zone = zone.lower()
     if zone not in VALID_ZONES:
         raise HTTPException(
             status_code=400,
-            detail=f"Zona inválida '{zone}'. Usa: norte, centro o sur.",
+            detail=f"Zona invalida '{zone}'. Usa: norte, centro o sur.",
         )
 
-    activos = [
-        c for c in collectors_db.values()
-        if c.get("zona") == zone and c.get("activo", False)
-    ]
+    result = await db.execute(
+        select(Collector).where(Collector.zona == zone, Collector.activo == True)
+    )
+    activos = result.scalars().all()
 
     camiones = [
         {
-            "camion_id": c["camion_id"],
-            "nombre_recolector": c["nombre"],
-            "zona": c["zona"],
-            "telefono": c.get("telefono"),
+            "camion_id": c.camion_id,
+            "nombre_recolector": c.nombre,
+            "zona": c.zona,
+            "telefono": c.telefono,
         }
         for c in activos
     ]
@@ -337,9 +323,10 @@ async def get_active_trucks(zone: str):
 
 
 @router.get("/reports")
-async def get_problem_reports(zone: str | None = None):
-    """Consulta los reportes de problemas. Filtrable por zona."""
-    result = problem_reports
+async def get_problem_reports(zone: str | None = None, db: AsyncSession = Depends(get_db)):
+    stmt = select(ProblemReport)
     if zone:
-        result = [r for r in result if r.get("zone") == zone.lower()]
-    return {"total": len(result), "reportes": result}
+        stmt = stmt.where(ProblemReport.zone == zone.lower())
+    result = await db.execute(stmt)
+    reports = [r.to_dict() for r in result.scalars().all()]
+    return {"total": len(reports), "reportes": reports}

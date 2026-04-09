@@ -276,14 +276,14 @@ def maybe_retrain() -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def generate_seed_history(sensor_registry: dict[str, dict]) -> None:
+def generate_seed_history(sensors_list: list[dict]) -> None:
     """Generate 72h of synthetic history for all registered sensors."""
     random.seed(42)
     now = datetime.now(timezone.utc)
     start = now - timedelta(hours=72)
     interval = timedelta(minutes=10)
 
-    for info in sensor_registry.values():
+    for info in sensors_list:
         cid = info["container_id"]
         zone = info["zone"]
         container_history[cid] = deque(maxlen=MAX_HISTORY_PER_CONTAINER)
