@@ -3,7 +3,7 @@ uvicorn[standard]==0.34.2
 sqlalchemy==2.0.40
 asyncpg==0.30.0
 geoalchemy2==0.17.1
-pydantic==2.11.3
+pydantic[email]==2.11.3
 pydantic-settings==2.9.1
 ortools==9.12.4544
 networkx==3.4.2
@@ -14,3 +14,4 @@ alembic==1.15.2
 google-auth==2.38.0
 python-jose[cryptography]==3.4.0
 scikit-learn==1.6.1
+bcrypt==4.3.0
