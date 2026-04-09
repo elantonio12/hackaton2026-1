@@ -1,37 +1,91 @@
 ---
-// Reportes ciudadanos en tiempo real
+// Reportes ciudadanos en tiempo real (panel del dashboard).
+// Lee de GET /reports/citizen → CitizenReportOut[].
 ---
 
 <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
-  <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Reportes ciudadanos</h2>
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Reportes ciudadanos</h2>
+    <a href="/admin/reportes" class="text-xs text-eco-info hover:underline">Ver todos →</a>
+  </div>
   <ul id="report-list" class="flex flex-col gap-2">
     <li class="text-xs text-eco-text-secondary">Cargando...</li>
   </ul>
 </div>
 
 <script>
+  const PROBLEM_LABELS: Record<string, string> = {
+    desbordado: 'Desbordado',
+    'dañado': 'Dañado',
+    basura_fuera: 'Basura fuera',
+    mal_olor: 'Mal olor',
+    obstruido: 'Acceso obstruido',
+    otro: 'Otro',
+  };
+
+  const PROBLEM_COLORS: Record<string, string> = {
+    desbordado: 'text-eco-danger',
+    'dañado': 'text-eco-warning',
+    basura_fuera: 'text-eco-warning',
+    mal_olor: 'text-eco-warning',
+    obstruido: 'text-eco-info',
+    otro: 'text-eco-text-secondary',
+  };
+
+  function timeAgo(iso: string): string {
+    const t = new Date(iso).getTime();
+    if (isNaN(t)) return '—';
+    const diffSec = Math.max(0, (Date.now() - t) / 1000);
+    if (diffSec < 60) return 'hace unos segundos';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `hace ${diffMin} min`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `hace ${diffH} h`;
+    const diffD = Math.floor(diffH / 24);
+    return `hace ${diffD} d`;
+  }
+
   async function loadReports() {
     const list = document.getElementById('report-list')!;
     try {
-      const res  = await fetch(`${window.__API__}/api/v1/reports/citizen`);
+      const res = await fetch(`${window.__API__}/api/v1/reports/citizen?limit=10`);
+      if (!res.ok) throw new Error('http ' + res.status);
       const data: any[] = await res.json();
 
-      if (data.length === 0) {
+      if (!Array.isArray(data) || data.length === 0) {
         list.innerHTML = '<li class="text-xs text-eco-text-secondary">Sin reportes por el momento.</li>';
         return;
       }
 
-      const recent = [...data].reverse().slice(0, 6);
-      list.innerHTML = recent.map(r => `
-        <li class="rounded-lg bg-eco-bg-header px-3 py-2">
-          <p class="text-sm text-eco-text-primary">${r.description}</p>
-          <p class="text-xs text-eco-text-secondary mt-0.5">Zona ${r.zone} · ${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}</p>
-        </li>`).join('');
-    } catch {
+      // Backend already orders by timestamp desc — take the top 6
+      const recent = data.slice(0, 6);
+      list.innerHTML = recent.map(r => {
+        const typeLabel = PROBLEM_LABELS[r.problem_type] ?? r.problem_type;
+        const typeColor = PROBLEM_COLORS[r.problem_type] ?? 'text-eco-text-secondary';
+        const zoneLabel = (r.zone || '').replace(/_/g, ' ');
+        const ago = timeAgo(r.created_at);
+        const desc = r.description && r.description !== '(sin descripción)'
+          ? `<p class="text-xs text-eco-text-secondary mt-1 line-clamp-2">${r.description}</p>`
+          : '';
+        return `
+          <li class="rounded-lg bg-eco-bg-header px-3 py-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-sm font-medium text-eco-text-primary truncate">${r.container_id}</span>
+              <span class="text-xs font-medium ${typeColor} shrink-0">${typeLabel}</span>
+            </div>
+            <div class="flex items-center justify-between gap-2 mt-0.5">
+              <span class="text-xs text-eco-text-secondary capitalize truncate">${zoneLabel}</span>
+              <span class="text-xs text-eco-text-secondary shrink-0">${ago}</span>
+            </div>
+            ${desc}
+          </li>`;
+      }).join('');
+    } catch (err) {
+      console.error('[ReportList] failed:', err);
       list.innerHTML = '<li class="text-xs text-eco-danger">Error al cargar reportes</li>';
     }
   }
 
   loadReports();
-  setInterval(loadReports, 15_000);
+  setInterval(loadReports, 20_000);
 </script>

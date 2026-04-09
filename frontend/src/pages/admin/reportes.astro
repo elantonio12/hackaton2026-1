@@ -7,11 +7,315 @@ import { adminNav } from '../../lib/nav';
 <Layout title="Reportes" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Reportes" nav={adminNav} />
-    <main class="max-w-6xl mx-auto px-4 py-6">
-      <h1 class="text-2xl font-semibold text-eco-text-primary mb-4">Reportes ciudadanos</h1>
-      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6">
-        <p class="text-sm text-eco-text-secondary">Generacion y visualizacion de reportes (en construccion).</p>
+
+    <main class="max-w-6xl mx-auto px-4 py-5 flex flex-col gap-4">
+
+      <!-- Header + global stats -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold text-eco-text-primary">Reportes ciudadanos</h1>
+          <p id="reports-summary" class="text-xs text-eco-text-secondary">Cargando…</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-eco-green animate-pulse"></span>
+          <span class="text-xs text-eco-text-secondary">En vivo · 20s</span>
+        </div>
       </div>
+
+      <!-- Status counters -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Recibidos</span>
+          <span class="text-2xl font-semibold text-eco-warning" id="stat-recibido">—</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">En proceso</span>
+          <span class="text-2xl font-semibold text-eco-info" id="stat-en-proceso">—</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Resueltos</span>
+          <span class="text-2xl font-semibold text-eco-green" id="stat-resuelto">—</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Descartados</span>
+          <span class="text-2xl font-semibold text-eco-text-secondary" id="stat-descartado">—</span>
+        </div>
+      </section>
+
+      <!-- Filters -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-3 flex flex-wrap items-center gap-2">
+        <span class="text-xs text-eco-text-secondary uppercase tracking-wide mr-1">Filtrar:</span>
+        <select
+          id="filter-status"
+          class="text-xs py-1.5 px-2.5 rounded-lg border border-eco-border bg-eco-bg text-eco-text-primary focus:outline-none focus:border-eco-green"
+        >
+          <option value="">Todos los estados</option>
+          <option value="recibido">Recibido</option>
+          <option value="en_proceso">En proceso</option>
+          <option value="resuelto">Resuelto</option>
+          <option value="descartado">Descartado</option>
+        </select>
+        <select
+          id="filter-type"
+          class="text-xs py-1.5 px-2.5 rounded-lg border border-eco-border bg-eco-bg text-eco-text-primary focus:outline-none focus:border-eco-green"
+        >
+          <option value="">Todos los tipos</option>
+          <option value="desbordado">Desbordado</option>
+          <option value="dañado">Dañado</option>
+          <option value="basura_fuera">Basura fuera</option>
+          <option value="mal_olor">Mal olor</option>
+          <option value="obstruido">Obstruido</option>
+          <option value="otro">Otro</option>
+        </select>
+        <span class="ml-auto text-xs text-eco-text-secondary" id="filter-count">—</span>
+      </div>
+
+      <!-- Reports table -->
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-xs text-eco-text-secondary uppercase tracking-wide border-b border-eco-border bg-eco-bg-header">
+                <th class="text-left py-2.5 px-4">Contenedor</th>
+                <th class="text-left py-2.5 px-2">Zona</th>
+                <th class="text-left py-2.5 px-2">Tipo</th>
+                <th class="text-left py-2.5 px-2">Descripción</th>
+                <th class="text-left py-2.5 px-2">Hace</th>
+                <th class="text-left py-2.5 px-2">Estado</th>
+                <th class="text-right py-2.5 px-4">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="reports-table-body" class="text-eco-text-primary">
+              <tr><td colspan="7" class="text-xs text-eco-text-secondary py-4 px-4">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Toast for action result -->
+      <div id="action-toast" class="hidden text-xs px-3 py-2 rounded-lg"></div>
+
     </main>
   </div>
 </Layout>
+
+<script>
+  /**
+   * /admin/reportes — operational view of citizen reports.
+   *
+   * Data:
+   *  - GET /reports/citizen/stats          → counts by status
+   *  - GET /reports/citizen?status=...&problem_type=...&limit=200
+   *  - PATCH /reports/citizen/{id}/status  → mark resolved/in_progress/dismissed
+   *
+   * Pattern mirrors /admin/rutas: server-side filters, in-place row
+   * updates, polling every 20s. The action buttons inline a single
+   * authenticated PATCH so the operator never has to leave the table.
+   */
+  const API = window.__API__;
+
+  const PROBLEM_LABELS: Record<string, string> = {
+    desbordado: 'Desbordado',
+    'dañado': 'Dañado',
+    basura_fuera: 'Basura fuera',
+    mal_olor: 'Mal olor',
+    obstruido: 'Obstruido',
+    otro: 'Otro',
+  };
+
+  const PROBLEM_COLORS: Record<string, string> = {
+    desbordado: 'text-eco-danger',
+    'dañado': 'text-eco-warning',
+    basura_fuera: 'text-eco-warning',
+    mal_olor: 'text-eco-warning',
+    obstruido: 'text-eco-info',
+    otro: 'text-eco-text-secondary',
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    recibido: 'Recibido',
+    en_proceso: 'En proceso',
+    resuelto: 'Resuelto',
+    descartado: 'Descartado',
+  };
+
+  const STATUS_BADGE_CLASS: Record<string, string> = {
+    recibido: 'bg-eco-warning/15 text-eco-warning',
+    en_proceso: 'bg-eco-info/15 text-eco-info',
+    resuelto: 'bg-eco-green/15 text-eco-green',
+    descartado: 'bg-eco-bg-header text-eco-text-secondary',
+  };
+
+  function timeAgo(iso: string): string {
+    const t = new Date(iso).getTime();
+    if (isNaN(t)) return '—';
+    const diffSec = Math.max(0, (Date.now() - t) / 1000);
+    if (diffSec < 60) return 'segs';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} min`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `${diffH} h`;
+    const diffD = Math.floor(diffH / 24);
+    return `${diffD} d`;
+  }
+
+  function escapeHtml(s: string): string {
+    if (!s) return '';
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function showToast(text: string, isError: boolean) {
+    const el = document.getElementById('action-toast')!;
+    el.textContent = text;
+    el.className = isError
+      ? 'text-xs px-3 py-2 rounded-lg bg-eco-danger/10 text-eco-danger border border-eco-danger/30'
+      : 'text-xs px-3 py-2 rounded-lg bg-eco-green/10 text-eco-green border border-eco-green/30';
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 4000);
+  }
+
+  // ── Stats ──────────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API}/api/v1/reports/citizen/stats`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const byStatus = data.by_status || {};
+      document.getElementById('stat-recibido')!.textContent    = String(byStatus.recibido    ?? 0);
+      document.getElementById('stat-en-proceso')!.textContent  = String(byStatus.en_proceso  ?? 0);
+      document.getElementById('stat-resuelto')!.textContent    = String(byStatus.resuelto    ?? 0);
+      document.getElementById('stat-descartado')!.textContent  = String(byStatus.descartado  ?? 0);
+      document.getElementById('reports-summary')!.textContent =
+        `${data.total} reportes en total · ${(byStatus.recibido ?? 0) + (byStatus.en_proceso ?? 0)} pendientes`;
+    } catch {}
+  }
+
+  // ── Reports table ──────────────────────────────────────────────────
+  async function loadReports() {
+    const body = document.getElementById('reports-table-body')!;
+    const status = (document.getElementById('filter-status') as HTMLSelectElement).value;
+    const type   = (document.getElementById('filter-type')   as HTMLSelectElement).value;
+
+    const params = new URLSearchParams({ limit: '200' });
+    if (status) params.set('status', status);
+    if (type)   params.set('problem_type', type);
+
+    try {
+      const res = await fetch(`${API}/api/v1/reports/citizen?${params}`);
+      if (!res.ok) throw new Error('http ' + res.status);
+      const data: any[] = await res.json();
+
+      document.getElementById('filter-count')!.textContent = `${data.length} resultado${data.length === 1 ? '' : 's'}`;
+
+      if (!Array.isArray(data) || data.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="text-xs text-eco-text-secondary py-4 px-4 text-center">Sin reportes que coincidan con el filtro.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = data.map(r => {
+        const typeLabel = PROBLEM_LABELS[r.problem_type] ?? r.problem_type;
+        const typeColor = PROBLEM_COLORS[r.problem_type] ?? 'text-eco-text-secondary';
+        const statusLabel = STATUS_LABELS[r.status] ?? r.status;
+        const badgeClass = STATUS_BADGE_CLASS[r.status] ?? 'bg-eco-bg-header text-eco-text-secondary';
+        const zoneLabel = (r.zone || '').replace(/_/g, ' ');
+        const ago = timeAgo(r.created_at);
+        const desc = r.description && r.description !== '(sin descripción)'
+          ? escapeHtml(r.description)
+          : '<span class="text-eco-text-secondary italic">—</span>';
+
+        // Action buttons depend on current status
+        let actions = '';
+        if (r.status === 'recibido') {
+          actions = `
+            <button data-id="${r.id}" data-status="en_proceso" class="action-btn text-xs px-2 py-1 rounded-md bg-eco-info/15 text-eco-info hover:bg-eco-info/25 transition-colors">Tomar</button>
+            <button data-id="${r.id}" data-status="descartado" class="action-btn text-xs px-2 py-1 rounded-md bg-eco-bg-header text-eco-text-secondary hover:bg-eco-border transition-colors">Descartar</button>
+          `;
+        } else if (r.status === 'en_proceso') {
+          actions = `
+            <button data-id="${r.id}" data-status="resuelto" class="action-btn text-xs px-2 py-1 rounded-md bg-eco-green/15 text-eco-green hover:bg-eco-green/25 transition-colors">Resolver</button>
+            <button data-id="${r.id}" data-status="recibido" class="action-btn text-xs px-2 py-1 rounded-md bg-eco-bg-header text-eco-text-secondary hover:bg-eco-border transition-colors">Devolver</button>
+          `;
+        } else if (r.status === 'resuelto' || r.status === 'descartado') {
+          actions = `
+            <button data-id="${r.id}" data-status="recibido" class="action-btn text-xs px-2 py-1 rounded-md bg-eco-bg-header text-eco-text-secondary hover:bg-eco-border transition-colors">Reabrir</button>
+          `;
+        }
+
+        return `
+          <tr class="border-b border-eco-border/50 hover:bg-eco-bg-header transition-colors">
+            <td class="py-2.5 px-4 font-medium text-eco-text-primary truncate max-w-[140px]">${escapeHtml(r.container_id)}</td>
+            <td class="py-2.5 px-2 capitalize text-eco-text-secondary truncate max-w-[120px]">${zoneLabel}</td>
+            <td class="py-2.5 px-2 font-medium ${typeColor}">${typeLabel}</td>
+            <td class="py-2.5 px-2 text-eco-text-secondary max-w-xs truncate" title="${escapeHtml(r.description ?? '')}">${desc}</td>
+            <td class="py-2.5 px-2 text-eco-text-secondary text-xs">${ago}</td>
+            <td class="py-2.5 px-2"><span class="text-xs px-2 py-0.5 rounded-full ${badgeClass}">${statusLabel}</span></td>
+            <td class="py-2.5 px-4 text-right whitespace-nowrap">${actions}</td>
+          </tr>`;
+      }).join('');
+
+      // Wire action buttons
+      body.querySelectorAll<HTMLButtonElement>('.action-btn').forEach(btn => {
+        btn.addEventListener('click', () => updateStatus(
+          parseInt(btn.dataset.id!),
+          btn.dataset.status!,
+        ));
+      });
+    } catch (err) {
+      console.error('[reportes] failed:', err);
+      body.innerHTML = '<tr><td colspan="7" class="text-xs text-eco-danger py-4 px-4 text-center">Error al cargar reportes</td></tr>';
+    }
+  }
+
+  // ── Action: PATCH status ───────────────────────────────────────────
+  async function updateStatus(id: number, newStatus: string) {
+    try {
+      const res = await (window as any).__authFetch__(`/api/v1/reports/citizen/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Error al actualizar el reporte', true);
+        return;
+      }
+      showToast(`Reporte #${id} → ${STATUS_LABELS[newStatus] ?? newStatus}`, false);
+      // Refresh table + stats so the row visibly changes
+      await Promise.all([loadReports(), loadStats()]);
+    } catch {
+      showToast('Error de red al actualizar el reporte', true);
+    }
+  }
+
+  // ── Filter listeners + bootstrap ───────────────────────────────────
+  document.getElementById('filter-status')!.addEventListener('change', loadReports);
+  document.getElementById('filter-type')!.addEventListener('change', loadReports);
+
+  loadStats();
+  loadReports();
+
+  // Polling — pause when tab hidden so we don't burn server cycles
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  function startPolling() {
+    if (pollInterval) return;
+    pollInterval = setInterval(() => {
+      loadStats();
+      loadReports();
+    }, 20_000);
+  }
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+  startPolling();
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopPolling();
+    else { startPolling(); loadStats(); loadReports(); }
+  });
+</script>
