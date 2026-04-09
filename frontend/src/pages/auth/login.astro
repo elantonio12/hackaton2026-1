@@ -49,11 +49,16 @@ import '../../styles/auth.css';
 </Layout>
 
 <script>
-  import { apiLogin, redirectByRole, isAuthenticated, getUser } from '../../lib/api';
+  import { apiLogin, redirectByRole, isAuthenticated, refreshUser } from '../../lib/api';
 
+  // If already logged in, refresh the user from /auth/me so the redirect
+  // uses the CURRENT role from the backend, not whatever was cached at the
+  // last login. Otherwise role changes (e.g. citizen -> admin) won't be
+  // honored until the next manual logout/login cycle.
   if (isAuthenticated()) {
-    const user = getUser();
-    if (user) redirectByRole(user);
+    refreshUser().then(user => {
+      if (user) redirectByRole(user);
+    });
   }
 
   const toggleBtn = document.getElementById('toggle-password');
