@@ -13,7 +13,7 @@
 #     fail under matrix queries with hundreds of points (which the VRP solver
 #     does on every optimization run).
 
-FROM osrm/osrm-backend:v5.27.1
+FROM ghcr.io/project-osrm/osrm-backend:v5.27.1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
