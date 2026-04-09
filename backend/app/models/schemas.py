@@ -30,6 +30,26 @@ class Collector(collectorBase):
     class config:
         from_attributes = True
 
+class SensorPayload(BaseModel):
+    """What a physical sensor sends."""
+    sensor_id: str
+    fill_level: float  # 0.0 to 1.0
+    height_cm: float   # height of trash measured by ultrasonic sensor
+
+
+class SensorRegistration(BaseModel):
+    """Register a sensor to a container location."""
+    sensor_id: str
+    container_id: str
+    latitude: float
+    longitude: float
+    zone: str
+
+
+class SensorInfo(SensorRegistration):
+    pass
+
+
 class ContainerReading(BaseModel):
     container_id: str
     latitude: float

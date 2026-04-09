@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 60 * 24  # 24 hours
 
+    # Sensor API key
+    sensor_api_key: str = "ecoruta-sensor-secret-2026"
+
     class Config:
         env_file = ".env"
 
