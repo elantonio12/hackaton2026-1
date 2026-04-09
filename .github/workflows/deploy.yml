@@ -10,9 +10,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generate .env from secrets
+        run: |
+          cat > .env << 'ENVEOF'
+          DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ecoruta
+          WATSONX_API_KEY=${{ secrets.WATSONX_API_KEY }}
+          WATSONX_PROJECT_ID=${{ secrets.WATSONX_PROJECT_ID }}
+          WATSONX_URL=https://us-south.ml.cloud.ibm.com
+          ALLOWED_ORIGINS=["https://hackaton2026.syle.studio","https://hackaton2026.pages.dev"]
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL=EcoRuta <noreply@mail.syle.studio>
+          FRONTEND_URL=https://hackaton2026.syle.studio
+          SENSOR_API_KEY=${{ secrets.SENSOR_API_KEY }}
+          ENVEOF
+
       - name: Build and deploy
         run: |
-          cp .env.example .env 2>/dev/null || true
           docker compose down
           docker compose build
           docker compose up -d
