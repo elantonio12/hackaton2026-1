@@ -1,10 +1,12 @@
 ---
-// Rutas optimizadas — se generan llamando al backend
+// Active route summary for the admin dashboard.
+// Triggers POST /routes/optimize and then lists each truck's active route
+// (name, distance, duration, stops) by querying /trucks/.
 ---
 
 <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
   <div class="flex items-center justify-between">
-    <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Rutas optimizadas</h2>
+    <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Rutas activas</h2>
     <button
       id="optimize-btn"
       class="btn btn-primary text-xs px-3 py-1"
@@ -12,45 +14,116 @@
       Generar rutas
     </button>
   </div>
-  <ul id="route-list" class="flex flex-col gap-2">
-    <li class="text-xs text-eco-text-secondary">Presiona "Generar rutas" para calcular.</li>
+  <p id="optimize-msg" class="text-xs text-eco-text-secondary hidden"></p>
+  <ul id="route-list" class="flex flex-col gap-2 max-h-96 overflow-y-auto">
+    <li class="text-xs text-eco-text-secondary">Cargando rutas activas...</li>
   </ul>
 </div>
 
 <script>
-  document.getElementById('optimize-btn')!.addEventListener('click', async () => {
-    const list = document.getElementById('route-list')!;
-    const btn  = document.getElementById('optimize-btn') as HTMLButtonElement;
-    btn.textContent = 'Calculando...';
-    btn.disabled = true;
-    list.innerHTML = '<li class="text-xs text-eco-text-secondary">Calculando rutas con IA...</li>';
+  import { apiListTrucks, apiGetTruckRoute, apiOptimizeRoutes } from '../lib/api';
+  import type { TruckOut, ActiveRouteOut } from '../lib/api';
 
+  const REFRESH_MS = 30_000;
+
+  function $(id: string): HTMLElement {
+    return document.getElementById(id)!;
+  }
+
+  function statusBadge(status: string): string {
+    const map: Record<string, string> = {
+      en_route: 'bg-eco-info/15 text-eco-info',
+      collecting: 'bg-eco-warning/15 text-eco-warning',
+      returning: 'bg-eco-green/15 text-eco-green',
+      idle: 'bg-eco-bg text-eco-text-secondary',
+    };
+    return map[status] ?? 'bg-eco-bg text-eco-text-secondary';
+  }
+
+  async function loadActiveRoutes() {
+    const list = $('route-list');
     try {
-      const res = await (window as any).__authFetch__(`/api/v1/routes/optimize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      const routes: any[] = data.routes ?? [];
+      const trucks = await apiListTrucks();
+      const active = trucks.filter(t => t.current_route_id !== null);
 
-      if (routes.length === 0) {
-        list.innerHTML = '<li class="text-xs text-eco-text-secondary">No hay contenedores críticos para rutear.</li>';
+      if (active.length === 0) {
+        list.innerHTML = '<li class="text-xs text-eco-text-secondary">No hay rutas activas. Presiona "Generar rutas".</li>';
         return;
       }
 
-      list.innerHTML = routes.map(r => `
-        <li class="flex items-center justify-between rounded-lg bg-eco-bg-header px-3 py-2">
-          <div>
-            <p class="text-sm font-medium text-eco-text-primary">${r.vehicle_id}</p>
-            <p class="text-xs text-eco-text-secondary">${r.total_distance_km} km · ${r.estimated_time_min} min</p>
-          </div>
-          <span class="text-xs bg-eco-green text-white px-2 py-0.5 rounded-full">${r.containers_visited} paradas</span>
-        </li>`).join('');
+      // Fetch route details in parallel
+      const routes = await Promise.all(
+        active.map(async (t) => {
+          try {
+            const r = await apiGetTruckRoute(t.id);
+            return { truck: t, route: r };
+          } catch {
+            return { truck: t, route: null };
+          }
+        })
+      );
+
+      list.innerHTML = routes
+        .filter(x => x.route !== null)
+        .map(({ truck, route }) => {
+          const r = route as ActiveRouteOut;
+          const collected = r.stops.filter(s => s.status === 'collected').length;
+          const total = r.stops.length;
+          const pct = total > 0 ? Math.round((collected / total) * 100) : 0;
+          return `
+            <li class="rounded-lg bg-eco-bg-header px-3 py-2 flex flex-col gap-1">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-medium text-eco-text-primary truncate">${truck.name}</p>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(truck.status)}">${truck.status}</span>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-xs text-eco-text-secondary">
+                <span>${r.distance_km.toFixed(1)} km &middot; ${Math.round(r.duration_min)} min</span>
+                <span>${collected}/${total} paradas</span>
+              </div>
+              <div class="h-1 bg-eco-border rounded-full overflow-hidden">
+                <div class="h-full bg-eco-green" style="width:${pct}%"></div>
+              </div>
+            </li>`;
+        }).join('');
     } catch {
-      list.innerHTML = '<li class="text-xs text-eco-danger">Error al generar rutas</li>';
+      list.innerHTML = '<li class="text-xs text-eco-danger">Error al cargar rutas activas</li>';
+    }
+  }
+
+  async function handleOptimize() {
+    const list = $('route-list');
+    const btn = $('optimize-btn') as HTMLButtonElement;
+    const msg = $('optimize-msg');
+    btn.textContent = 'Calculando...';
+    btn.disabled = true;
+    list.innerHTML = '<li class="text-xs text-eco-text-secondary">Optimizando rutas con OR-Tools + OSRM...</li>';
+
+    try {
+      const data = await apiOptimizeRoutes();
+      msg.textContent = `${data.message} (${data.generated} generadas, ${data.skipped} omitidas)`;
+      msg.classList.remove('hidden');
+      await loadActiveRoutes();
+    } catch (err) {
+      list.innerHTML = `<li class="text-xs text-eco-danger">${(err as Error).message}</li>`;
     } finally {
       btn.textContent = 'Generar rutas';
       btn.disabled = false;
+    }
+  }
+
+  $('optimize-btn').addEventListener('click', handleOptimize);
+
+  // Initial load
+  loadActiveRoutes();
+
+  // Auto-refresh
+  let refreshTimer: number | null = window.setInterval(loadActiveRoutes, REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (refreshTimer !== null) { clearInterval(refreshTimer); refreshTimer = null; }
+    } else {
+      loadActiveRoutes();
+      if (refreshTimer === null) refreshTimer = window.setInterval(loadActiveRoutes, REFRESH_MS);
     }
   });
 </script>

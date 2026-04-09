@@ -159,3 +159,87 @@ export async function apiLogout() {
   await apiFetch('/auth/logout', { method: 'POST' });
   clearAuth();
 }
+
+// ---------------------------------------------------------------------------
+// Trucks API (recolector views)
+// ---------------------------------------------------------------------------
+
+export type TruckStatus = 'idle' | 'en_route' | 'collecting' | 'returning' | 'offline';
+
+export interface TruckOut {
+  id: string;
+  name: string;
+  zone: string;
+  capacity_m3: number;
+  current_load_m3: number;
+  depot_lat: number;
+  depot_lon: number;
+  current_lat: number;
+  current_lon: number;
+  status: TruckStatus;
+  current_route_id: number | null;
+  updated_at: string;
+}
+
+export interface TruckRouteStop {
+  order: number;
+  container_id: string;
+  latitude: number;
+  longitude: number;
+  fill_level: number;
+  status: 'pending' | 'collected' | 'skipped';
+  distance_along_route_m: number;
+}
+
+export interface ActiveRouteOut {
+  id: number;
+  truck_id: string;
+  stops: TruckRouteStop[];
+  polyline_geojson: { type: 'LineString'; coordinates: [number, number][] };
+  distance_km: number;
+  duration_min: number;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+}
+
+/** Fetch the truck assigned to the currently logged-in collector. */
+export async function apiGetMyTruck(): Promise<TruckOut> {
+  const res = await apiFetch('/trucks/me');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'No tienes un camion asignado');
+  }
+  return res.json();
+}
+
+/** Fetch the active route for the current collector. Returns null if none. */
+export async function apiGetMyRoute(): Promise<ActiveRouteOut | null> {
+  const res = await apiFetch('/trucks/me/route');
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Error al obtener la ruta activa');
+  return res.json();
+}
+
+/** List all trucks (admin RouteList). */
+export async function apiListTrucks(): Promise<TruckOut[]> {
+  const res = await apiFetch('/trucks/');
+  if (!res.ok) throw new Error('Error al listar camiones');
+  return res.json();
+}
+
+/** Fetch the active route for a specific truck (admin RouteList). */
+export async function apiGetTruckRoute(truckId: string): Promise<ActiveRouteOut | null> {
+  const res = await apiFetch(`/trucks/${truckId}/route`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Error al obtener la ruta del camion');
+  return res.json();
+}
+
+/** Trigger /routes/optimize. Admin-only. */
+export async function apiOptimizeRoutes(): Promise<{ generated: number; skipped: number; message: string }> {
+  const res = await apiFetch('/routes/optimize', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Error al optimizar rutas');
+  return data;
+}

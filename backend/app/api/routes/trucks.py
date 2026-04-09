@@ -81,6 +81,29 @@ async def get_my_route(
     return _route_payload(route)
 
 
+@router.get("/me", response_model=TruckOut)
+async def get_my_truck(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the truck assigned to the current authenticated user.
+
+    Used by the recolector frontend to display the truck identity, status,
+    and live position even when there is no active route (e.g. truck is
+    idle at the depot between optimization rounds). The /me/route endpoint
+    above 404s in that case, so this endpoint is the always-on identity
+    lookup for the logged-in collector.
+    """
+    stmt = select(Truck).where(Truck.assigned_user_sub == user.sub)
+    truck = (await db.execute(stmt)).scalar_one_or_none()
+    if not truck:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No tienes un camion asignado. Contacta a tu supervisor.",
+        )
+    return _truck_payload(truck)
+
+
 @router.get("/{truck_id}", response_model=TruckOut)
 async def get_truck(truck_id: str, db: AsyncSession = Depends(get_db)):
     truck = await _get_truck(db, truck_id)

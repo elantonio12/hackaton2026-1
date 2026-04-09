@@ -10,13 +10,24 @@ import { collectorNav } from '../../lib/nav';
 
     <main class="max-w-lg mx-auto px-4 py-5 flex flex-col gap-4">
 
-      <!-- Status card -->
+      <!-- Truck identity card -->
+      <div id="truck-card" class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Tu camion</span>
+          <span id="truck-status-badge" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-eco-bg-header text-eco-text-secondary">—</span>
+        </div>
+        <div class="flex items-baseline justify-between gap-2">
+          <p id="truck-name" class="text-lg font-medium text-eco-text-primary truncate">Cargando...</p>
+          <p id="truck-id" class="text-xs text-eco-text-secondary font-mono">—</p>
+        </div>
+        <p id="truck-zone" class="text-xs text-eco-text-secondary capitalize">—</p>
+      </div>
+
+      <!-- Route stats card -->
       <div id="route-status" class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-2">
         <div class="flex items-center justify-between">
           <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Tu ruta de hoy</span>
-          <button id="generate-btn" class="btn btn-primary text-xs px-3 py-1">
-            Generar ruta
-          </button>
+          <span id="route-state" class="text-xs text-eco-text-secondary">—</span>
         </div>
         <div class="grid grid-cols-3 gap-3 mt-1">
           <div class="text-center">
@@ -36,9 +47,12 @@ import { collectorNav } from '../../lib/nav';
 
       <!-- Stop list -->
       <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
-        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Paradas en orden</h2>
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Paradas en orden</h2>
+          <span id="stop-progress" class="text-xs text-eco-text-secondary">—</span>
+        </div>
         <ol id="stop-list" class="flex flex-col gap-2">
-          <li class="text-sm text-eco-text-secondary">Presiona "Generar ruta" para calcular tu recorrido optimizado.</li>
+          <li class="text-sm text-eco-text-secondary">Cargando ruta...</li>
         </ol>
       </div>
 
@@ -47,67 +61,144 @@ import { collectorNav } from '../../lib/nav';
 </Layout>
 
 <script>
-  const API = window.__API__;
+  import { apiGetMyRoute, apiGetMyTruck } from '../../lib/api';
+  import type { ActiveRouteOut, TruckOut, TruckStatus } from '../../lib/api';
 
-  document.getElementById('generate-btn')!.addEventListener('click', async () => {
-    const btn = document.getElementById('generate-btn') as HTMLButtonElement;
-    const list = document.getElementById('stop-list')!;
-    btn.textContent = 'Calculando...';
-    btn.disabled = true;
-    list.innerHTML = '<li class="text-sm text-eco-text-secondary">Optimizando ruta con IA...</li>';
+  const TRUCK_POLL_MS = 5000;
+  const ROUTE_POLL_MS = 15000;
 
-    try {
-      const res = await (window as any).__authFetch__(`/api/v1/routes/optimize`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      const routes: any[] = data.routes ?? [];
+  const STATUS_LABEL: Record<TruckStatus, string> = {
+    idle: 'En descanso',
+    en_route: 'En ruta',
+    collecting: 'Recolectando',
+    returning: 'Volviendo al deposito',
+    offline: 'Fuera de linea',
+  };
 
-      if (routes.length === 0) {
-        list.innerHTML = '<li class="text-sm text-eco-text-secondary">No hay contenedores que requieran recolección.</li>';
-        document.getElementById('stop-count')!.textContent = '0';
-        return;
-      }
+  const STATUS_CLASS: Record<TruckStatus, string> = {
+    idle: 'bg-eco-bg-header text-eco-text-secondary',
+    en_route: 'bg-eco-info/15 text-eco-info',
+    collecting: 'bg-eco-warning/15 text-eco-warning',
+    returning: 'bg-eco-green/15 text-eco-green',
+    offline: 'bg-eco-danger/15 text-eco-danger',
+  };
 
-      // Use first route as the assigned route for this collector
-      const route = routes[0];
-      const stops: any[] = route.stops ?? [];
+  function $(id: string): HTMLElement {
+    return document.getElementById(id)!;
+  }
 
-      document.getElementById('stop-count')!.textContent = String(route.containers_visited);
-      document.getElementById('total-km')!.textContent = String(route.total_distance_km);
-      document.getElementById('total-time')!.textContent = String(route.estimated_time_min);
+  function renderTruck(truck: TruckOut) {
+    $('truck-name').textContent = truck.name;
+    $('truck-id').textContent = truck.id;
+    $('truck-zone').textContent = `Zona: ${truck.zone}`;
+    const badge = $('truck-status-badge');
+    badge.textContent = STATUS_LABEL[truck.status] ?? truck.status;
+    badge.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CLASS[truck.status] ?? 'bg-eco-bg-header text-eco-text-secondary'}`;
+  }
 
-      // Store for map page
-      sessionStorage.setItem('ecoruta_stops', JSON.stringify(stops));
+  function renderRouteEmpty(reason: string) {
+    $('route-state').textContent = 'Sin ruta';
+    $('stop-count').textContent = '0';
+    $('total-km').textContent = '—';
+    $('total-time').textContent = '—';
+    $('stop-progress').textContent = '';
+    $('stop-list').innerHTML = `<li class="text-sm text-eco-text-secondary">${reason}</li>`;
+  }
 
-      list.innerHTML = stops.map((s: any, i: number) => {
-        const pct = Math.round(s.fill_level * 100);
-        const barColor = pct >= 80 ? 'bg-eco-danger' : pct >= 50 ? 'bg-eco-warning' : 'bg-eco-green';
-        const urgency = pct >= 90 ? 'Urgente' : pct >= 80 ? 'Crítico' : 'Normal';
-        const urgencyColor = pct >= 90 ? 'text-eco-danger' : pct >= 80 ? 'text-eco-warning' : 'text-eco-green';
-        return `
-          <li class="flex items-center gap-3 bg-eco-bg-header rounded-lg px-3 py-2.5">
-            <span class="w-7 h-7 rounded-full bg-eco-green text-white text-xs font-bold flex items-center justify-center shrink-0">${i + 1}</span>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-eco-text-primary">${s.container_id}</p>
-                <span class="text-xs font-medium ${urgencyColor}">${urgency}</span>
-              </div>
-              <div class="flex items-center gap-2 mt-1">
-                <div class="flex-1 h-1.5 bg-eco-border rounded-full overflow-hidden">
-                  <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
-                </div>
-                <span class="text-xs text-eco-text-secondary w-8 text-right">${pct}%</span>
-              </div>
-              <p class="text-xs text-eco-text-secondary mt-0.5">${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}</p>
+  function renderRoute(route: ActiveRouteOut) {
+    const stops = route.stops ?? [];
+    const collected = stops.filter(s => s.status === 'collected').length;
+
+    $('route-state').textContent = `Ruta #${route.id}`;
+    $('stop-count').textContent = String(stops.length);
+    $('total-km').textContent = route.distance_km.toFixed(1);
+    $('total-time').textContent = String(Math.round(route.duration_min));
+    $('stop-progress').textContent = `${collected} / ${stops.length} recolectadas`;
+
+    if (stops.length === 0) {
+      $('stop-list').innerHTML = '<li class="text-sm text-eco-text-secondary">La ruta no tiene paradas asignadas.</li>';
+      return;
+    }
+
+    $('stop-list').innerHTML = stops.map((s, i) => {
+      const pct = Math.round(s.fill_level * 100);
+      const isCollected = s.status === 'collected';
+      const barColor = pct >= 80 ? 'bg-eco-danger' : pct >= 50 ? 'bg-eco-warning' : 'bg-eco-green';
+      const urgency = pct >= 90 ? 'Urgente' : pct >= 80 ? 'Critico' : 'Normal';
+      const urgencyColor = pct >= 90 ? 'text-eco-danger' : pct >= 80 ? 'text-eco-warning' : 'text-eco-green';
+
+      const bullet = isCollected
+        ? `<span class="w-7 h-7 rounded-full bg-eco-text-secondary text-white text-sm font-bold flex items-center justify-center shrink-0">&#10003;</span>`
+        : `<span class="w-7 h-7 rounded-full bg-eco-green text-white text-xs font-bold flex items-center justify-center shrink-0">${i + 1}</span>`;
+
+      const wrapClass = isCollected
+        ? 'flex items-center gap-3 bg-eco-bg-header rounded-lg px-3 py-2.5 opacity-60'
+        : 'flex items-center gap-3 bg-eco-bg-header rounded-lg px-3 py-2.5';
+
+      const titleClass = isCollected
+        ? 'text-sm font-medium text-eco-text-secondary line-through'
+        : 'text-sm font-medium text-eco-text-primary';
+
+      return `
+        <li class="${wrapClass}">
+          ${bullet}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <p class="${titleClass}">${s.container_id}</p>
+              <span class="text-xs font-medium ${isCollected ? 'text-eco-green' : urgencyColor}">${isCollected ? 'Recolectado' : urgency}</span>
             </div>
-          </li>`;
-      }).join('');
-    } catch {
-      list.innerHTML = '<li class="text-sm text-eco-danger">Error al generar ruta. Verifica la conexión.</li>';
-    } finally {
-      btn.textContent = 'Generar ruta';
-      btn.disabled = false;
+            <div class="flex items-center gap-2 mt-1">
+              <div class="flex-1 h-1.5 bg-eco-border rounded-full overflow-hidden">
+                <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
+              </div>
+              <span class="text-xs text-eco-text-secondary w-8 text-right">${pct}%</span>
+            </div>
+          </div>
+        </li>`;
+    }).join('');
+  }
+
+  async function pollTruck() {
+    try {
+      const truck = await apiGetMyTruck();
+      renderTruck(truck);
+    } catch (err) {
+      $('truck-name').textContent = 'Sin camion asignado';
+      $('truck-status-badge').textContent = 'Error';
+    }
+  }
+
+  async function pollRoute() {
+    try {
+      const route = await apiGetMyRoute();
+      if (route) {
+        renderRoute(route);
+      } else {
+        renderRouteEmpty('Esperando asignacion de ruta. Reintentando automaticamente...');
+      }
+    } catch (err) {
+      renderRouteEmpty('Error al cargar la ruta. Reintentando...');
+    }
+  }
+
+  // Initial load
+  pollTruck();
+  pollRoute();
+
+  // Polling loops
+  let truckTimer: number | null = window.setInterval(pollTruck, TRUCK_POLL_MS);
+  let routeTimer: number | null = window.setInterval(pollRoute, ROUTE_POLL_MS);
+
+  // Pause polling when tab hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (truckTimer !== null) { clearInterval(truckTimer); truckTimer = null; }
+      if (routeTimer !== null) { clearInterval(routeTimer); routeTimer = null; }
+    } else {
+      pollTruck();
+      pollRoute();
+      if (truckTimer === null) truckTimer = window.setInterval(pollTruck, TRUCK_POLL_MS);
+      if (routeTimer === null) routeTimer = window.setInterval(pollRoute, ROUTE_POLL_MS);
     }
   });
 </script>
