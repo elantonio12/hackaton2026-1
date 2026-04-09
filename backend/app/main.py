@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions, metrics
+from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions, metrics, user
 from app.core.config import settings
 
 app = FastAPI(
@@ -26,14 +26,23 @@ app.include_router(collectors.router, prefix="/api/v1/collectors", tags=["collec
 app.include_router(sensors.router, prefix="/api/v1/sensors", tags=["sensors"])
 app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["predictions"])
 app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["metrics"])
+app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
+
 
 @app.on_event("startup")
 async def startup():
+    # Seed sensor registry
     sensors.seed_sensor_registry()
+
+    # Entrenar modelo de llenado de contenedores
     from app.services.prediction import generate_seed_history, train_initial_model
     from app.api.routes.sensors import sensor_registry
     generate_seed_history(sensor_registry)
     train_initial_model()
+
+    # Entrenar modelo de llegada de camiones
+    from app.services.truck_prediction import train_initial_model as train_truck_model
+    train_truck_model()
 
 
 @app.get("/health")
