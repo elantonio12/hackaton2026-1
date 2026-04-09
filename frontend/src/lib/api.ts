@@ -65,20 +65,6 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
 // Auth API calls
 // ---------------------------------------------------------------------------
 
-export async function apiRegister(name: string, email: string, password: string) {
-  const res = await apiFetch('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name, email, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Error al registrarse');
-  // If auto-verified (no Resend), save auth
-  if (data.access_token) {
-    saveAuth(data.access_token, data.user);
-  }
-  return data;
-}
-
 export async function apiLogin(email: string, password: string) {
   const res = await apiFetch('/auth/login', {
     method: 'POST',
@@ -90,13 +76,13 @@ export async function apiLogin(email: string, password: string) {
   return data;
 }
 
-export async function apiVerifyEmail(token: string) {
-  const res = await apiFetch(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+export async function apiInviteUser(name: string, email: string, role: string) {
+  const res = await apiFetch('/auth/invite', {
+    method: 'POST',
+    body: JSON.stringify({ name, email, role }),
+  });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Error al verificar');
-  if (data.access_token) {
-    saveAuth(data.access_token, data.user);
-  }
+  if (!res.ok) throw new Error(data.detail || 'Error al invitar usuario');
   return data;
 }
 
