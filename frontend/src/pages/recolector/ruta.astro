@@ -3,8 +3,123 @@ import Layout from '../../layouts/Layout.astro';
 ---
 
 <Layout title="Ruta Asignada">
-  <main class="h-full overflow-y-auto p-6">
-    <h1 class="text-2xl font-bold text-eco-text-primary mb-6">Ruta Asignada</h1>
-    <!-- TODO: Detalle de la ruta asignada al recolector -->
-  </main>
+  <div class="h-app overflow-y-auto bg-eco-bg">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-10 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-3.375c0-.621-.504-1.125-1.125-1.125H18.75M3.375 14.25h3.75m0 0V5.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v8.625m-6.75 0h6.75m0 0h1.5m-1.5 0v-2.25m0 0h3.375c.621 0 1.125.504 1.125 1.125v1.125"/>
+        </svg>
+        <span class="font-medium text-eco-text-primary text-base">EcoRuta</span>
+        <span class="text-xs text-eco-text-secondary hidden sm:inline">— Recolector</span>
+      </div>
+      <a href="/recolector/mapa" class="text-xs px-3 py-1.5 rounded-lg bg-eco-green text-white font-medium">
+        Ver mapa
+      </a>
+    </header>
+
+    <main class="max-w-lg mx-auto px-4 py-5 flex flex-col gap-4">
+
+      <!-- Status card -->
+      <div id="route-status" class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Tu ruta de hoy</span>
+          <button id="generate-btn" class="text-xs px-3 py-1 rounded-lg bg-eco-green text-white font-medium active:scale-95 transition-transform">
+            Generar ruta
+          </button>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mt-1">
+          <div class="text-center">
+            <p class="text-2xl font-medium text-eco-text-primary" id="stop-count">—</p>
+            <p class="text-xs text-eco-text-secondary">Paradas</p>
+          </div>
+          <div class="text-center">
+            <p class="text-2xl font-medium text-eco-info" id="total-km">—</p>
+            <p class="text-xs text-eco-text-secondary">Km total</p>
+          </div>
+          <div class="text-center">
+            <p class="text-2xl font-medium text-eco-warning" id="total-time">—</p>
+            <p class="text-xs text-eco-text-secondary">Min aprox</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stop list -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Paradas en orden</h2>
+        <ol id="stop-list" class="flex flex-col gap-2">
+          <li class="text-sm text-eco-text-secondary">Presiona "Generar ruta" para calcular tu recorrido optimizado.</li>
+        </ol>
+      </div>
+
+    </main>
+  </div>
 </Layout>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+
+  document.getElementById('generate-btn')!.addEventListener('click', async () => {
+    const btn = document.getElementById('generate-btn') as HTMLButtonElement;
+    const list = document.getElementById('stop-list')!;
+    btn.textContent = 'Calculando...';
+    btn.disabled = true;
+    list.innerHTML = '<li class="text-sm text-eco-text-secondary">Optimizando ruta con IA...</li>';
+
+    try {
+      const res = await fetch(`${API}/api/v1/routes/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      const routes: any[] = data.routes ?? [];
+
+      if (routes.length === 0) {
+        list.innerHTML = '<li class="text-sm text-eco-text-secondary">No hay contenedores que requieran recolección.</li>';
+        document.getElementById('stop-count')!.textContent = '0';
+        return;
+      }
+
+      // Use first route as the assigned route for this collector
+      const route = routes[0];
+      const stops: any[] = route.stops ?? [];
+
+      document.getElementById('stop-count')!.textContent = String(route.containers_visited);
+      document.getElementById('total-km')!.textContent = String(route.total_distance_km);
+      document.getElementById('total-time')!.textContent = String(route.estimated_time_min);
+
+      // Store for map page
+      sessionStorage.setItem('ecoruta_stops', JSON.stringify(stops));
+
+      list.innerHTML = stops.map((s: any, i: number) => {
+        const pct = Math.round(s.fill_level * 100);
+        const barColor = pct >= 80 ? 'bg-eco-danger' : pct >= 50 ? 'bg-eco-warning' : 'bg-eco-green';
+        const urgency = pct >= 90 ? 'Urgente' : pct >= 80 ? 'Crítico' : 'Normal';
+        const urgencyColor = pct >= 90 ? 'text-eco-danger' : pct >= 80 ? 'text-eco-warning' : 'text-eco-green';
+        return `
+          <li class="flex items-center gap-3 bg-eco-bg-header rounded-lg px-3 py-2.5">
+            <span class="w-7 h-7 rounded-full bg-eco-green text-white text-xs font-bold flex items-center justify-center shrink-0">${i + 1}</span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-eco-text-primary">${s.container_id}</p>
+                <span class="text-xs font-medium ${urgencyColor}">${urgency}</span>
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <div class="flex-1 h-1.5 bg-eco-border rounded-full overflow-hidden">
+                  <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
+                </div>
+                <span class="text-xs text-eco-text-secondary w-8 text-right">${pct}%</span>
+              </div>
+              <p class="text-xs text-eco-text-secondary mt-0.5">${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}</p>
+            </div>
+          </li>`;
+      }).join('');
+    } catch {
+      list.innerHTML = '<li class="text-sm text-eco-danger">Error al generar ruta. Verifica la conexión.</li>';
+    } finally {
+      btn.textContent = 'Generar ruta';
+      btn.disabled = false;
+    }
+  });
+</script>

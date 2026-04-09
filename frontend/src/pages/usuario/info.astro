@@ -2,9 +2,222 @@
 import Layout from '../../layouts/Layout.astro';
 ---
 
-<Layout title="Información">
-  <main class="h-full overflow-y-auto p-6">
-    <h1 class="text-2xl font-bold text-eco-text-primary mb-6">Información</h1>
-    <!-- TODO: Página informativa para el usuario -->
-  </main>
+<Layout title="Mi Zona">
+  <div class="h-app overflow-y-auto bg-eco-bg">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-10 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <a href="/usuario/reportes" class="text-eco-text-secondary hover:text-eco-text-primary">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+          </svg>
+        </a>
+        <span class="font-medium text-eco-text-primary text-base">Info de mi zona</span>
+      </div>
+    </header>
+
+    <main class="max-w-lg mx-auto px-4 py-5 flex flex-col gap-4">
+
+      <!-- Zone selector -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Selecciona tu zona</h2>
+        </div>
+        <div class="flex gap-2" id="zone-selector">
+          <button data-zone="centro" class="zone-btn flex-1 py-2 rounded-lg text-sm font-medium border border-eco-green bg-eco-green text-white">Centro</button>
+          <button data-zone="norte" class="zone-btn flex-1 py-2 rounded-lg text-sm font-medium border border-eco-border text-eco-text-secondary bg-eco-bg">Norte</button>
+          <button data-zone="sur" class="zone-btn flex-1 py-2 rounded-lg text-sm font-medium border border-eco-border text-eco-text-secondary bg-eco-bg">Sur</button>
+        </div>
+      </div>
+
+      <!-- Zone stats -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Contenedores</span>
+          <span class="text-2xl font-medium text-eco-text-primary" id="zone-total">—</span>
+          <span class="text-xs text-eco-text-secondary">en la zona</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Críticos</span>
+          <span class="text-2xl font-medium text-eco-danger" id="zone-critical">—</span>
+          <span class="text-xs text-eco-text-secondary">necesitan recolección</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Nivel promedio</span>
+          <span class="text-2xl font-medium text-eco-info" id="zone-avg">—</span>
+          <span class="text-xs text-eco-text-secondary">de llenado</span>
+        </div>
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-1">
+          <span class="text-xs text-eco-text-secondary uppercase tracking-wide">Estado</span>
+          <span class="text-2xl font-medium text-eco-green" id="zone-status">—</span>
+          <span class="text-xs text-eco-text-secondary" id="zone-status-sub">del servicio</span>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Contenedores en tu zona</h2>
+        <div id="map" class="w-full h-56 rounded-lg z-0"></div>
+        <div class="flex gap-4 text-xs text-eco-text-secondary">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-eco-danger inline-block"></span>Lleno</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-eco-warning inline-block"></span>Medio</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-eco-green inline-block"></span>Disponible</span>
+        </div>
+      </div>
+
+      <!-- Container list for zone -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Detalle de contenedores</h2>
+        <ul id="container-list" class="flex flex-col gap-2">
+          <li class="text-sm text-eco-text-secondary">Cargando...</li>
+        </ul>
+      </div>
+
+    </main>
+  </div>
 </Layout>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<script>
+  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
+
+  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+  let currentZone = 'centro';
+  let allContainers: any[] = [];
+  let mapInstance: any = null;
+  let markers: any[] = [];
+
+  // Zone centers
+  const ZONE_CENTER: Record<string, [number, number]> = {
+    centro: [19.432, -99.133],
+    norte:  [19.49, -99.12],
+    sur:    [19.35, -99.16],
+  };
+
+  // Init map
+  mapInstance = L.map('map', { zoomControl: true }).setView(ZONE_CENTER.centro, 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(mapInstance);
+
+  function markerColor(fill: number) {
+    if (fill >= 0.8) return '#ef4444';
+    if (fill >= 0.5) return '#f59e0b';
+    return '#16a34a';
+  }
+
+  function circleIcon(color: string) {
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+  }
+
+  // Zone selector
+  document.getElementById('zone-selector')!.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.zone-btn') as HTMLButtonElement;
+    if (!btn) return;
+    currentZone = btn.dataset.zone!;
+
+    document.querySelectorAll('.zone-btn').forEach(b => {
+      b.className = 'zone-btn flex-1 py-2 rounded-lg text-sm font-medium border border-eco-border text-eco-text-secondary bg-eco-bg';
+    });
+    btn.className = 'zone-btn flex-1 py-2 rounded-lg text-sm font-medium border border-eco-green bg-eco-green text-white';
+
+    renderZone();
+  });
+
+  function renderZone() {
+    const zoneContainers = allContainers.filter(c => c.zone === currentZone);
+    const critical = zoneContainers.filter(c => c.fill_level >= 0.8);
+    const avg = zoneContainers.length > 0
+      ? zoneContainers.reduce((s, c) => s + c.fill_level, 0) / zoneContainers.length
+      : 0;
+    const avgPct = Math.round(avg * 100);
+
+    document.getElementById('zone-total')!.textContent = String(zoneContainers.length);
+    document.getElementById('zone-critical')!.textContent = String(critical.length);
+    document.getElementById('zone-avg')!.textContent = `${avgPct}%`;
+
+    const statusEl = document.getElementById('zone-status')!;
+    const statusSub = document.getElementById('zone-status-sub')!;
+    if (critical.length === 0) {
+      statusEl.textContent = 'OK';
+      statusEl.className = 'text-2xl font-medium text-eco-green';
+      statusSub.textContent = 'sin urgencias';
+    } else if (critical.length <= 3) {
+      statusEl.textContent = 'Atención';
+      statusEl.className = 'text-2xl font-medium text-eco-warning';
+      statusSub.textContent = `${critical.length} contenedores llenos`;
+    } else {
+      statusEl.textContent = 'Crítico';
+      statusEl.className = 'text-2xl font-medium text-eco-danger';
+      statusSub.textContent = `${critical.length} contenedores llenos`;
+    }
+
+    // Map
+    markers.forEach(m => m.remove());
+    markers = [];
+    const latlngs: [number, number][] = [];
+
+    zoneContainers.forEach(c => {
+      const color = markerColor(c.fill_level);
+      const pct = Math.round(c.fill_level * 100);
+      const m = L.marker([c.latitude, c.longitude], { icon: circleIcon(color) })
+        .bindPopup(`<b>${c.container_id}</b><br/>Nivel: ${pct}%`)
+        .addTo(mapInstance);
+      markers.push(m);
+      latlngs.push([c.latitude, c.longitude]);
+    });
+
+    if (latlngs.length > 0) {
+      mapInstance.fitBounds(L.latLngBounds(latlngs).pad(0.15));
+    } else {
+      mapInstance.setView(ZONE_CENTER[currentZone] ?? [19.432, -99.133], 13);
+    }
+
+    // Container list
+    const list = document.getElementById('container-list')!;
+    if (zoneContainers.length === 0) {
+      list.innerHTML = '<li class="text-sm text-eco-text-secondary">Sin contenedores en esta zona.</li>';
+      return;
+    }
+
+    const sorted = [...zoneContainers].sort((a, b) => b.fill_level - a.fill_level);
+    list.innerHTML = sorted.map(c => {
+      const pct = Math.round(c.fill_level * 100);
+      const barColor = pct >= 80 ? 'bg-eco-danger' : pct >= 50 ? 'bg-eco-warning' : 'bg-eco-green';
+      const label = pct >= 80 ? 'Lleno' : pct >= 50 ? 'Medio' : 'OK';
+      const labelColor = pct >= 80 ? 'text-eco-danger' : pct >= 50 ? 'text-eco-warning' : 'text-eco-green';
+      return `
+        <li class="flex items-center gap-3 bg-eco-bg-header rounded-lg px-3 py-2">
+          <span class="text-sm font-medium text-eco-text-primary w-20 shrink-0">${c.container_id}</span>
+          <div class="flex-1 h-1.5 bg-eco-border rounded-full overflow-hidden">
+            <div class="${barColor} h-full rounded-full" style="width:${pct}%"></div>
+          </div>
+          <span class="text-xs text-eco-text-secondary w-8 text-right">${pct}%</span>
+          <span class="text-xs font-medium ${labelColor} w-12 text-right">${label}</span>
+        </li>`;
+    }).join('');
+  }
+
+  // Load data
+  async function loadContainers() {
+    try {
+      const res = await fetch(`${API}/api/v1/containers/readings`);
+      allContainers = await res.json();
+      renderZone();
+    } catch {
+      document.getElementById('container-list')!.innerHTML =
+        '<li class="text-sm text-eco-danger">Error al cargar datos</li>';
+    }
+  }
+
+  loadContainers();
+  setInterval(loadContainers, 15_000);
+</script>
