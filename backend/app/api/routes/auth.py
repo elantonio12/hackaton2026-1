@@ -109,6 +109,18 @@ async def google_login(body: GoogleLoginRequest):
     return TokenResponse(access_token=access_token, user=users_db[sub])
 
 
+@router.get("/verify", response_model=UserInfo)
+async def verify_token(user: dict = Depends(get_current_user)):
+    """Verify that a JWT is still valid and return the user."""
+    return user
+
+
+@router.post("/logout")
+async def logout(user: dict = Depends(get_current_user)):
+    """Logout (client should discard the token)."""
+    return {"status": "logged_out", "email": user.get("email")}
+
+
 @router.get("/me", response_model=UserInfo)
 async def me(user: dict = Depends(get_current_user)):
     """Return the authenticated user's profile."""
