@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions
+from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions, metrics
 from app.core.config import settings
 
 app = FastAPI(
@@ -25,6 +25,7 @@ app.include_router(reports.router, prefix="/api/v1/reports", tags=["reports"])
 app.include_router(collectors.router, prefix="/api/v1/collectors", tags=["collectors"])
 app.include_router(sensors.router, prefix="/api/v1/sensors", tags=["sensors"])
 app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["predictions"])
+app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["metrics"])
 
 @app.on_event("startup")
 async def startup():

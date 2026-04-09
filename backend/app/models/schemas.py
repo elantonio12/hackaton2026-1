@@ -107,3 +107,58 @@ class ModelStatus(BaseModel):
     loss: float | None = None
     readings_since_last_train: int
     next_retrain_in: int
+
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+class ZoneMetrics(BaseModel):
+    zone: str
+    total_containers: int
+    critical_containers: int
+    avg_fill_level: float
+    avg_fill_rate_per_hour: float
+
+
+class EfficiencyMetrics(BaseModel):
+    optimized_distance_km: float
+    standard_distance_km: float
+    distance_saved_km: float
+    distance_reduction_pct: float
+    total_containers_visited: int
+    vehicles_used: int
+
+
+class EnvironmentalMetrics(BaseModel):
+    fuel_saved_liters: float
+    co2_avoided_kg: float
+    diesel_price_mxn: float
+    fuel_cost_saved_mxn: float
+
+
+class FinancialMetrics(BaseModel):
+    daily_fuel_savings_mxn: float
+    monthly_fuel_savings_mxn: float
+    yearly_fuel_savings_mxn: float
+    cost_per_optimized_route_mxn: float
+    cost_per_standard_route_mxn: float
+
+
+class SystemStatus(BaseModel):
+    total_containers_monitored: int
+    total_sensors_registered: int
+    total_collectors: int
+    active_collectors: int
+    containers_critical: int
+    containers_predicted_full_24h: int
+    prediction_model_trained: bool
+
+
+class MetricsResponse(BaseModel):
+    efficiency: EfficiencyMetrics
+    environmental: EnvironmentalMetrics
+    financial: FinancialMetrics
+    system: SystemStatus
+    zones: list[ZoneMetrics]
+    generated_at: str
