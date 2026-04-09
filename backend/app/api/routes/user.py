@@ -34,26 +34,61 @@ VALID_ZONES = {"norte", "centro", "sur"}
 
 # ---------------------------------------------------------------------------
 # Politicas de horarios por zona (CDMX)
+# Dias basados en el calendario oficial SEDEMA 2026 (programa Basura Cero):
+#   Organicos:    martes, jueves y sabado
+#   Inorganicos:  lunes, miercoles, viernes y domingo
+# Horarios diferenciados por zona segun densidad de recoleccion.
+# Fuente: SEDEMA / Gobierno CDMX, enero 2026
 # ---------------------------------------------------------------------------
 
 ZONE_SCHEDULES = {
     "norte": {
-        "dias": ["lunes", "miercoles", "viernes"],
-        "hora_inicio": 7,
-        "hora_fin": 14,
-        "descripcion": "Zona Norte: recoleccion lunes, miercoles y viernes de 7:00 a 14:00 hrs",
+        "organicos": {
+            "dias": ["martes", "jueves", "sabado"],
+            "hora_inicio": 7,
+            "hora_fin": 13,
+        },
+        "inorganicos": {
+            "dias": ["lunes", "miercoles", "viernes", "domingo"],
+            "hora_inicio": 7,
+            "hora_fin": 13,
+        },
+        "descripcion": (
+            "Zona Norte — Organicos (bolsa verde): martes, jueves y sabado de 7:00 a 13:00 hrs. "
+            "Inorganicos (bolsa gris/naranja): lunes, miercoles, viernes y domingo de 7:00 a 13:00 hrs."
+        ),
     },
     "centro": {
-        "dias": ["martes", "jueves", "sabado"],
-        "hora_inicio": 8,
-        "hora_fin": 15,
-        "descripcion": "Zona Centro: recoleccion martes, jueves y sabado de 8:00 a 15:00 hrs",
+        "organicos": {
+            "dias": ["martes", "jueves", "sabado"],
+            "hora_inicio": 8,
+            "hora_fin": 14,
+        },
+        "inorganicos": {
+            "dias": ["lunes", "miercoles", "viernes", "domingo"],
+            "hora_inicio": 8,
+            "hora_fin": 14,
+        },
+        "descripcion": (
+            "Zona Centro — Organicos (bolsa verde): martes, jueves y sabado de 8:00 a 14:00 hrs. "
+            "Inorganicos (bolsa gris/naranja): lunes, miercoles, viernes y domingo de 8:00 a 14:00 hrs."
+        ),
     },
     "sur": {
-        "dias": ["lunes", "jueves"],
-        "hora_inicio": 9,
-        "hora_fin": 16,
-        "descripcion": "Zona Sur: recoleccion lunes y jueves de 9:00 a 16:00 hrs",
+        "organicos": {
+            "dias": ["martes", "jueves", "sabado"],
+            "hora_inicio": 9,
+            "hora_fin": 15,
+        },
+        "inorganicos": {
+            "dias": ["lunes", "miercoles", "viernes", "domingo"],
+            "hora_inicio": 9,
+            "hora_fin": 15,
+        },
+        "descripcion": (
+            "Zona Sur — Organicos (bolsa verde): martes, jueves y sabado de 9:00 a 15:00 hrs. "
+            "Inorganicos (bolsa gris/naranja): lunes, miercoles, viernes y domingo de 9:00 a 15:00 hrs."
+        ),
     },
 }
 
@@ -68,6 +103,7 @@ WEEKDAY_NAMES = {
 
 class NextTruckResponse(BaseModel):
     zone: str
+    tipo_residuo: str
     proximo_dia: str
     hora_inicio: str
     hora_fin: str
@@ -125,48 +161,62 @@ class ActiveTrucksResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_next_collection(zone: str) -> dict:
+def _get_next_collection(zone: str, tipo_residuo: str | None = None) -> dict:
+    """
+    Calcula el proximo camion de recoleccion para una zona.
+    Si tipo_residuo es 'organicos' o 'inorganicos', filtra solo ese tipo.
+    Si no se especifica, retorna el que llegue mas pronto de cualquier tipo.
+    """
     schedule = ZONE_SCHEDULES[zone]
     now = datetime.now(timezone.utc)
     cdmx_now = now - timedelta(hours=6)
     current_weekday = cdmx_now.weekday()
     current_hour = cdmx_now.hour
     current_day_name = WEEKDAY_NAMES[current_weekday]
-
-    collection_days = schedule["dias"]
-    hora_inicio = schedule["hora_inicio"]
-    hora_fin = schedule["hora_fin"]
-
-    if current_day_name in collection_days and hora_inicio <= current_hour < hora_fin:
-        return {
-            "proximo_dia": current_day_name,
-            "hora_inicio": f"{hora_inicio:02d}:00",
-            "hora_fin": f"{hora_fin:02d}:00",
-            "en_curso": True,
-            "horas_para_siguiente": None,
-        }
-
     weekday_map = {v: k for k, v in WEEKDAY_NAMES.items()}
-    min_hours = float("inf")
-    next_day_name = None
 
-    for day_name in collection_days:
-        target_weekday = weekday_map[day_name]
-        days_ahead = (target_weekday - current_weekday) % 7
-        if days_ahead == 0 and current_hour >= hora_fin:
-            days_ahead = 7
-        hours_ahead = days_ahead * 24 + (hora_inicio - current_hour)
-        if hours_ahead < min_hours:
-            min_hours = hours_ahead
-            next_day_name = day_name
+    tipos = (
+        [(tipo_residuo, schedule[tipo_residuo])]
+        if tipo_residuo
+        else [("organicos", schedule["organicos"]), ("inorganicos", schedule["inorganicos"])]
+    )
 
-    return {
-        "proximo_dia": next_day_name,
-        "hora_inicio": f"{hora_inicio:02d}:00",
-        "hora_fin": f"{hora_fin:02d}:00",
-        "en_curso": False,
-        "horas_para_siguiente": round(min_hours, 1),
-    }
+    best = None
+    best_hours = float("inf")
+
+    for tipo, config in tipos:
+        hora_inicio = config["hora_inicio"]
+        hora_fin = config["hora_fin"]
+        collection_days = config["dias"]
+
+        if current_day_name in collection_days and hora_inicio <= current_hour < hora_fin:
+            return {
+                "tipo_residuo": tipo,
+                "proximo_dia": current_day_name,
+                "hora_inicio": f"{hora_inicio:02d}:00",
+                "hora_fin": f"{hora_fin:02d}:00",
+                "en_curso": True,
+                "horas_para_siguiente": None,
+            }
+
+        for day_name in collection_days:
+            target_weekday = weekday_map[day_name]
+            days_ahead = (target_weekday - current_weekday) % 7
+            if days_ahead == 0 and current_hour >= hora_fin:
+                days_ahead = 7
+            hours_ahead = days_ahead * 24 + (hora_inicio - current_hour)
+            if hours_ahead < best_hours:
+                best_hours = hours_ahead
+                best = {
+                    "tipo_residuo": tipo,
+                    "proximo_dia": day_name,
+                    "hora_inicio": f"{hora_inicio:02d}:00",
+                    "hora_fin": f"{hora_fin:02d}:00",
+                    "en_curso": False,
+                    "horas_para_siguiente": round(hours_ahead, 1),
+                }
+
+    return best
 
 
 def _fill_status(fill_level: float) -> str:
@@ -182,7 +232,18 @@ def _fill_status(fill_level: float) -> str:
 # ---------------------------------------------------------------------------
 
 @router.get("/next-truck", response_model=NextTruckResponse)
-async def get_next_truck(zone: str):
+async def get_next_truck(zone: str, tipo_residuo: str | None = None):
+    """
+    Retorna cuando pasa el proximo camion de recoleccion por la zona.
+
+    - zone: norte, centro o sur
+    - tipo_residuo (opcional): 'organicos' o 'inorganicos'
+      Si no se especifica, devuelve el camion mas proximo de cualquier tipo.
+
+    Calendario oficial SEDEMA 2026 (Basura Cero):
+      Organicos (bolsa verde):   martes, jueves y sabado
+      Inorganicos (bolsa gris/naranja): lunes, miercoles, viernes y domingo
+    """
     zone = zone.lower()
     if zone not in VALID_ZONES:
         raise HTTPException(
@@ -190,8 +251,16 @@ async def get_next_truck(zone: str):
             detail=f"Zona invalida '{zone}'. Usa: norte, centro o sur.",
         )
 
+    if tipo_residuo is not None:
+        tipo_residuo = tipo_residuo.lower()
+        if tipo_residuo not in {"organicos", "inorganicos"}:
+            raise HTTPException(
+                status_code=400,
+                detail="tipo_residuo debe ser 'organicos' o 'inorganicos'.",
+            )
+
     schedule = ZONE_SCHEDULES[zone]
-    next_collection = _get_next_collection(zone)
+    next_collection = _get_next_collection(zone, tipo_residuo)
 
     return NextTruckResponse(
         zone=zone,
