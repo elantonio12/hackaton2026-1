@@ -71,12 +71,17 @@ import { citizenNav } from '../../lib/nav';
 </Layout>
 
 <script>
-  const L = (window as any).__L__;
+  const w = window as any;
+  const L = w.__L__;
   const API = window.__API__;
   let currentZone = 'centro';
   let allContainers: any[] = [];
-  let mapInstance: any = (window as any).__maps__?.['map'];
-  let markers: any[] = [];
+  const mapInstance: any = w.__maps__?.['map'];
+  const canvasRenderer: any = w.__canvas__?.['map'];
+  const clusterGroup: any = w.__clusters__?.['map'];
+
+  // Keyed store for in-place updates
+  const markerIndex: Map<string, any> = new Map();
 
   // Zone centers
   const ZONE_CENTER: Record<string, [number, number]> = {
@@ -91,15 +96,6 @@ import { citizenNav } from '../../lib/nav';
     if (fill >= 0.8) return '#ef4444';
     if (fill >= 0.5) return '#f59e0b';
     return '#16a34a';
-  }
-
-  function circleIcon(color: string) {
-    return L.divIcon({
-      className: '',
-      html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
-    });
   }
 
   // Zone selector
@@ -144,20 +140,50 @@ import { citizenNav } from '../../lib/nav';
       statusSub.textContent = `${critical.length} contenedores llenos`;
     }
 
-    // Map
-    markers.forEach(m => m.remove());
-    markers = [];
+    // Map: canvas-rendered circle markers, updated in place
+    const seen = new Set<string>();
+    const newMarkers: any[] = [];
     const latlngs: [number, number][] = [];
 
-    zoneContainers.forEach(c => {
+    for (const c of zoneContainers) {
+      seen.add(c.container_id);
       const color = markerColor(c.fill_level);
       const pct = Math.round(c.fill_level * 100);
-      const m = L.marker([c.latitude, c.longitude], { icon: circleIcon(color) })
-        .bindPopup(`<b>${c.container_id}</b><br/>Nivel: ${pct}%`)
-        .addTo(mapInstance);
-      markers.push(m);
+      const popup = `<b>${c.container_id}</b><br/>Nivel: ${pct}%`;
       latlngs.push([c.latitude, c.longitude]);
-    });
+
+      const existing = markerIndex.get(c.container_id);
+      if (existing) {
+        existing.setStyle({ color, fillColor: color });
+        existing.setPopupContent(popup);
+      } else {
+        const m = L.circleMarker([c.latitude, c.longitude], {
+          renderer: canvasRenderer,
+          radius: 5,
+          color,
+          fillColor: color,
+          fillOpacity: 0.85,
+          weight: 1.5,
+        }).bindPopup(popup);
+        markerIndex.set(c.container_id, m);
+        newMarkers.push(m);
+      }
+    }
+
+    if (newMarkers.length && clusterGroup) {
+      clusterGroup.addLayers(newMarkers);
+    } else if (newMarkers.length) {
+      newMarkers.forEach(m => m.addTo(mapInstance));
+    }
+
+    // Remove markers no longer in the current zone view
+    for (const [cid, marker] of markerIndex.entries()) {
+      if (!seen.has(cid)) {
+        if (clusterGroup) clusterGroup.removeLayer(marker);
+        else marker.remove();
+        markerIndex.delete(cid);
+      }
+    }
 
     if (latlngs.length > 0) {
       mapInstance.fitBounds(L.latLngBounds(latlngs).pad(0.15));
@@ -203,5 +229,5 @@ import { citizenNav } from '../../lib/nav';
   }
 
   loadContainers();
-  setInterval(loadContainers, 15_000);
+  setInterval(loadContainers, 30_000);
 </script>

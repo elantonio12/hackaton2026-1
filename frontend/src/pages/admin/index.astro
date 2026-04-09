@@ -113,10 +113,15 @@ import { adminNav } from '../../lib/nav';
 
 <script>
 const API = window.__API__;
-const L = (window as any).__L__;
-const map = (window as any).__maps__?.['map'];
+const w = window as any;
+const L = w.__L__;
+const map = w.__maps__?.['map'];
+const canvasRenderer = w.__canvas__?.['map'];
+const clusterGroup = w.__clusters__?.['map'];
 
-const markers: any[] = [];
+// Keyed store: container_id -> L.CircleMarker. Allows in-place updates
+// instead of destroying and recreating 10,000 markers every refresh.
+const markerIndex: Map<string, any> = new Map();
 
 function markerColor(fill: number) {
   if (fill >= 0.8) return '#ef4444';
@@ -124,32 +129,66 @@ function markerColor(fill: number) {
   return '#16a34a';
 }
 
-function circleIcon(color: string) {
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
-    iconSize: [12, 12], iconAnchor: [6, 6],
-  });
+function popupHtml(c: any) {
+  return `<b>${c.container_id}</b><br/>Zona: ${c.zone}<br/>Nivel: ${Math.round(c.fill_level * 100)}%`;
 }
 
 async function loadMap() {
   try {
     const res = await fetch(`${API}/api/v1/containers/readings`);
     const containers: any[] = await res.json();
-    markers.forEach(m => m.remove());
-    markers.length = 0;
-    containers.forEach(c => {
+
+    const seen = new Set<string>();
+    const newMarkers: any[] = [];
+
+    for (const c of containers) {
+      seen.add(c.container_id);
       const color = markerColor(c.fill_level);
-      const m = L.marker([c.latitude, c.longitude], { icon: circleIcon(color) })
-        .bindPopup(`<b>${c.container_id}</b><br/>Zona: ${c.zone}<br/>Nivel: ${Math.round(c.fill_level * 100)}%`)
-        .addTo(map);
-      markers.push(m);
-    });
+      const existing = markerIndex.get(c.container_id);
+
+      if (existing) {
+        // In-place update: no DOM churn
+        existing.setStyle({ color, fillColor: color });
+        existing.setPopupContent(popupHtml(c));
+      } else {
+        // Canvas-rendered circle: drawn on a single <canvas> element
+        // instead of an individual SVG/DOM node per marker.
+        const marker = L.circleMarker([c.latitude, c.longitude], {
+          renderer: canvasRenderer,
+          radius: 5,
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.85,
+          weight: 1.5,
+        }).bindPopup(popupHtml(c));
+        markerIndex.set(c.container_id, marker);
+        newMarkers.push(marker);
+      }
+    }
+
+    // Add new markers in a single batch to the cluster group
+    // (addLayers is significantly faster than N calls to addLayer).
+    if (newMarkers.length && clusterGroup) {
+      clusterGroup.addLayers(newMarkers);
+    } else if (newMarkers.length) {
+      newMarkers.forEach(m => m.addTo(map));
+    }
+
+    // Remove markers for containers that no longer exist
+    for (const [cid, marker] of markerIndex.entries()) {
+      if (!seen.has(cid)) {
+        if (clusterGroup) clusterGroup.removeLayer(marker);
+        else marker.remove();
+        markerIndex.delete(cid);
+      }
+    }
   } catch {}
 }
 
 loadMap();
-setInterval(loadMap, 10_000);
+// 30s refresh: fill levels don't change fast enough to justify 10s polls
+// at 10K scale — full payload is ~1.5MB per request.
+setInterval(loadMap, 30_000);
 
 // ── Metricas ──────────────────────────────────────────────────────
 async function loadMetrics() {

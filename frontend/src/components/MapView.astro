@@ -1,55 +1,104 @@
 ---
 /**
- * Reusable Leaflet map component.
+ * Reusable Leaflet map component with high-performance rendering
+ * for large point sets (10K+ markers).
+ *
+ * Exposes on window:
+ *   __L__        - Leaflet library
+ *   __maps__     - { [id]: L.Map }
+ *   __canvas__   - { [id]: L.Canvas } (shared canvas renderer per map)
+ *   __clusters__ - { [id]: L.MarkerClusterGroup } (optional cluster layer)
  *
  * Props:
  *   id       - DOM id for the map container (default: "map")
- *   height   - CSS height class (default: "h-64")
- *   center   - [lat, lng] (default: [19.432, -99.133])
- *   zoom     - initial zoom (default: 12)
+ *   height   - Tailwind height class (default: "h-64")
+ *   center   - [lat, lng] (default: CDMX centro)
+ *   zoom     - initial zoom (default: 11)
+ *   cluster  - enable Leaflet.markercluster (default: true)
  */
 interface Props {
   id?: string;
   height?: string;
   center?: [number, number];
   zoom?: number;
+  cluster?: boolean;
 }
 
 const {
   id = 'map',
   height = 'h-64',
   center = [19.432, -99.133],
-  zoom = 12,
+  zoom = 11,
+  cluster = true,
 } = Astro.props;
 ---
 
-<div id={id} class={`w-full ${height} rounded-lg z-0`}
+<div
+  id={id}
+  class={`w-full ${height} rounded-lg z-0`}
   data-center={JSON.stringify(center)}
   data-zoom={zoom}
+  data-cluster={cluster ? 'true' : 'false'}
 ></div>
 
 <script>
   /**
-   * Initialize all MapView instances on the page.
-   * Exposes window.__L__ and window.__maps__ = { [id]: L.map } for scripts to add markers.
+   * Initialize all MapView instances on the page with a shared canvas
+   * renderer and an optional marker cluster group for high-performance
+   * rendering of thousands of points.
    */
   import L from 'leaflet';
   import 'leaflet/dist/leaflet.css';
+  import 'leaflet.markercluster';
+  import 'leaflet.markercluster/dist/MarkerCluster.css';
+  import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 
-  (window as any).__L__ = L;
-  (window as any).__maps__ = (window as any).__maps__ || {};
+  const w = window as any;
+  w.__L__ = L;
+  w.__maps__ = w.__maps__ || {};
+  w.__canvas__ = w.__canvas__ || {};
+  w.__clusters__ = w.__clusters__ || {};
 
   document.querySelectorAll<HTMLElement>('[data-center]').forEach((el) => {
-    if ((window as any).__maps__[el.id]) return; // already init
+    if (w.__maps__[el.id]) return; // already init
     const center = JSON.parse(el.dataset.center!);
-    const zoom = parseInt(el.dataset.zoom!) || 12;
+    const zoom = parseInt(el.dataset.zoom!) || 11;
+    const wantsCluster = el.dataset.cluster !== 'false';
 
-    const map = L.map(el.id, { zoomControl: true }).setView(center, zoom);
+    const map = L.map(el.id, {
+      zoomControl: true,
+      preferCanvas: true, // hint to use canvas for vector rendering
+    }).setView(center, zoom);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
       maxZoom: 18,
     }).addTo(map);
 
-    (window as any).__maps__[el.id] = map;
+    // Shared canvas renderer: all circleMarkers added via this renderer
+    // are drawn onto a single <canvas> element instead of individual
+    // SVG/DOM nodes. This is the key to rendering 10,000+ markers without
+    // burning client CPU.
+    const canvasRenderer = (L as any).canvas({ padding: 0.5 });
+    w.__canvas__[el.id] = canvasRenderer;
+
+    if (wantsCluster) {
+      // Cluster group: at low zoom levels, nearby markers collapse into
+      // cluster icons showing counts. Visually powerful for city-scale
+      // deployments — density hotspots become obvious immediately.
+      const clusterGroup = (L as any).markerClusterGroup({
+        chunkedLoading: true,           // add markers in batches to keep UI responsive
+        chunkInterval: 100,
+        chunkDelay: 50,
+        maxClusterRadius: 60,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        disableClusteringAtZoom: 16,
+      });
+      map.addLayer(clusterGroup);
+      w.__clusters__[el.id] = clusterGroup;
+    }
+
+    w.__maps__[el.id] = map;
   });
 </script>
