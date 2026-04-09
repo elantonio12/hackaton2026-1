@@ -8,7 +8,7 @@ import ReportList from '../../components/ReportList.astro';
 import { adminNav } from '../../lib/nav';
 ---
 
-<Layout title="Dashboard">
+<Layout title="Dashboard" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Dashboard" nav={adminNav} />
 

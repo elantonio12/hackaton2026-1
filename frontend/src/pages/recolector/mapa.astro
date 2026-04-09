@@ -5,7 +5,7 @@ import MapView from '../../components/MapView.astro';
 import { collectorNav } from '../../lib/nav';
 ---
 
-<Layout title="Mapa de Ruta">
+<Layout title="Mapa de Ruta" requiredRole={['collector', 'admin']}>
   <div class="h-app flex flex-col bg-eco-bg">
     <AppHeader title="Mapa" nav={collectorNav} backHref="/recolector/ruta" />
 
@@ -59,9 +59,8 @@ import { collectorNav } from '../../lib/nav';
     } else {
       // Generate route directly
       try {
-        const res = await fetch(`${API}/api/v1/routes/optimize`, {
+        const res = await (window as any).__authFetch__(`/api/v1/routes/optimize`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
         });
         const data = await res.json();
         const routes: any[] = data.routes ?? [];

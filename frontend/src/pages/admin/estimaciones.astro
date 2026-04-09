@@ -4,7 +4,7 @@ import AppHeader from '../../components/AppHeader.astro';
 import { adminNav } from '../../lib/nav';
 ---
 
-<Layout title="Estimaciones">
+<Layout title="Estimaciones" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Estimaciones" nav={adminNav} />
     <main class="max-w-6xl mx-auto px-4 py-6">

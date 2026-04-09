@@ -4,7 +4,7 @@ import AppHeader from '../../components/AppHeader.astro';
 import { collectorNav } from '../../lib/nav';
 ---
 
-<Layout title="Mi Ruta">
+<Layout title="Mi Ruta" requiredRole={['collector', 'admin']}>
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Mi ruta" nav={collectorNav} />
 
@@ -57,9 +57,8 @@ import { collectorNav } from '../../lib/nav';
     list.innerHTML = '<li class="text-sm text-eco-text-secondary">Optimizando ruta con IA...</li>';
 
     try {
-      const res = await fetch(`${API}/api/v1/routes/optimize`, {
+      const res = await (window as any).__authFetch__(`/api/v1/routes/optimize`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
       const routes: any[] = data.routes ?? [];

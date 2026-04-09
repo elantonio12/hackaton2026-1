@@ -4,7 +4,7 @@ import AppHeader from '../../components/AppHeader.astro';
 import { adminNav } from '../../lib/nav';
 ---
 
-<Layout title="Invitar Usuario">
+<Layout title="Invitar Usuario" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
     <AppHeader title="Invitar usuario" nav={adminNav} />
 

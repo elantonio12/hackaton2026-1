@@ -3,9 +3,14 @@ import '../styles/global.css';
 
 interface Props {
   title: string;
+  /** Restrict this page to one or more roles. Triggers an early synchronous redirect. */
+  requiredRole?: 'admin' | 'collector' | 'citizen' | Array<'admin' | 'collector' | 'citizen'>;
 }
 
-const { title } = Astro.props;
+const { title, requiredRole } = Astro.props;
+const requiredRoleList = requiredRole
+  ? (Array.isArray(requiredRole) ? requiredRole : [requiredRole])
+  : null;
 ---
 
 <html lang="es">
@@ -22,9 +27,47 @@ const { title } = Astro.props;
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>{title} | EcoRuta</title>
-    <script is:inline>
+    <script is:inline define:vars={{ requiredRoleList }}>
       /* Global API root — single source of truth for client scripts */
       window.__API__ = 'https://apihackaton.syle.studio';
+      /* Pass required role to bundled scripts (AppHeader) for the fresh re-check */
+      window.__REQUIRED_ROLE__ = requiredRoleList;
+
+      /* Authenticated fetch helper for inline scripts (adds Bearer token from localStorage) */
+      window.__authFetch__ = function (path, options) {
+        options = options || {};
+        var headers = Object.assign(
+          { 'Content-Type': 'application/json' },
+          options.headers || {}
+        );
+        var token = localStorage.getItem('ecoruta_token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        return fetch(window.__API__ + path, Object.assign({}, options, { headers: headers }));
+      };
+
+      /* Synchronous role guard — runs in <head> before any content renders.
+         Uses cached user from localStorage for instant protection.
+         The async fresh check happens later in AppHeader. */
+      if (requiredRoleList) {
+        const token = localStorage.getItem('ecoruta_token');
+        if (!token) {
+          window.location.replace('/auth/login');
+        } else {
+          try {
+            const user = JSON.parse(localStorage.getItem('ecoruta_user') || '{}');
+            const role = user.role || 'citizen';
+            if (!requiredRoleList.includes(role)) {
+              const home = role === 'admin' ? '/admin'
+                         : role === 'collector' ? '/recolector/ruta'
+                         : '/usuario/info';
+              window.location.replace(home);
+            }
+          } catch {
+            window.location.replace('/auth/login');
+          }
+        }
+      }
+
       /* PWA viewport fix: set --app-height from window.innerHeight */
       function setAppHeight() {
         document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');

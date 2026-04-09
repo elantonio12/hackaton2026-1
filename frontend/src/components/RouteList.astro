@@ -26,7 +26,7 @@
     list.innerHTML = '<li class="text-xs text-eco-text-secondary">Calculando rutas con IA...</li>';
 
     try {
-      const res = await fetch(`${window.__API__}/api/v1/routes/optimize`, {
+      const res = await (window as any).__authFetch__(`/api/v1/routes/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

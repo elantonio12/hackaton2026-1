@@ -89,32 +89,45 @@ const { title, backHref, nav } = Astro.props;
 </header>
 
 <script>
-  import { getUser, apiLogout, isAuthenticated } from '../lib/api';
+  import { apiLogout, isAuthenticated, refreshUser, requireRole, type Role } from '../lib/api';
 
-  // Guard: redirect to login if not authenticated
-  if (!isAuthenticated()) {
-    window.location.href = '/auth/login';
-  } else {
-    const user = getUser();
-    if (user) {
-      const name = (user.name as string) || 'Usuario';
-      const email = (user.email as string) || '';
-      const role = (user.role as string) || 'citizen';
-      const initials = name.split(' ').slice(0, 2).map(s => s[0] || '').join('').toUpperCase() || '?';
+  function renderUser(user: Record<string, unknown> | null) {
+    if (!user) return;
+    const name = (user.name as string) || 'Usuario';
+    const email = (user.email as string) || '';
+    const role = (user.role as string) || 'citizen';
+    const initials = name.split(' ').slice(0, 2).map(s => s[0] || '').join('').toUpperCase() || '?';
 
-      const avatarEl = document.getElementById('user-avatar');
-      const nameEl = document.getElementById('user-name');
-      const ddName = document.getElementById('dropdown-name');
-      const ddEmail = document.getElementById('dropdown-email');
-      const ddRole = document.getElementById('dropdown-role');
+    const avatarEl = document.getElementById('user-avatar');
+    const nameEl = document.getElementById('user-name');
+    const ddName = document.getElementById('dropdown-name');
+    const ddEmail = document.getElementById('dropdown-email');
+    const ddRole = document.getElementById('dropdown-role');
 
-      if (avatarEl) avatarEl.textContent = initials;
-      if (nameEl) nameEl.textContent = name.split(' ')[0]; // first name only
-      if (ddName) ddName.textContent = name;
-      if (ddEmail) ddEmail.textContent = email;
-      if (ddRole) ddRole.textContent = role;
-    }
+    if (avatarEl) avatarEl.textContent = initials;
+    if (nameEl) nameEl.textContent = name.split(' ')[0];
+    if (ddName) ddName.textContent = name;
+    if (ddEmail) ddEmail.textContent = email;
+    if (ddRole) ddRole.textContent = role;
   }
+
+  (async () => {
+    if (!isAuthenticated()) {
+      window.location.href = '/auth/login';
+      return;
+    }
+
+    // Async fresh check: catches role changes since last login
+    const requiredRole = (window as any).__REQUIRED_ROLE__ as Role[] | null;
+    let user: Record<string, unknown> | null;
+    if (requiredRole && requiredRole.length > 0) {
+      user = await requireRole(requiredRole);
+      if (!user) return; // requireRole already redirected
+    } else {
+      user = await refreshUser();
+    }
+    renderUser(user);
+  })();
 
   // Logout handler
   document.getElementById('logout-btn')?.addEventListener('click', async () => {

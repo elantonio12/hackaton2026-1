@@ -36,16 +36,70 @@ export function isAuthenticated(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Role-based redirect
+// Role-based access control
 // ---------------------------------------------------------------------------
 
-export function redirectByRole(user: Record<string, unknown>) {
-  const role = user.role as string || 'citizen';
+export type Role = 'admin' | 'collector' | 'citizen';
+
+/** Home path for each role — used by login redirect and access denials. */
+export function homeForRole(role: string | undefined): string {
   switch (role) {
-    case 'admin':     window.location.href = '/admin'; break;
-    case 'collector': window.location.href = '/recolector/ruta'; break;
-    default:          window.location.href = '/usuario/info'; break;
+    case 'admin':     return '/admin';
+    case 'collector': return '/recolector/ruta';
+    default:          return '/usuario/info';
   }
+}
+
+export function redirectByRole(user: Record<string, unknown>) {
+  window.location.href = homeForRole(user.role as string);
+}
+
+/**
+ * Refresh the cached user from /auth/me.
+ * - Updates localStorage with the latest user data
+ * - Clears auth + redirects to /auth/login if the token is invalid
+ * - Returns the fresh user, or null if not authenticated
+ */
+export async function refreshUser(): Promise<Record<string, unknown> | null> {
+  if (!isAuthenticated()) return null;
+  try {
+    const res = await apiFetch('/auth/me');
+    if (!res.ok) {
+      clearAuth();
+      window.location.href = '/auth/login';
+      return null;
+    }
+    const data = await res.json();
+    // /auth/me returns either the user directly or { user: ... }
+    const user = data.user ?? data;
+    localStorage.setItem('ecoruta_user', JSON.stringify(user));
+    return user;
+  } catch {
+    return getUser();
+  }
+}
+
+/**
+ * Enforce that the current user has one of the allowed roles.
+ * - Refreshes the user from the backend first (so role changes are detected)
+ * - Redirects to the role's home if the user has the wrong role
+ * - Redirects to /auth/login if not authenticated
+ * - Returns the user if access is granted, otherwise null
+ */
+export async function requireRole(allowed: Role | Role[]): Promise<Record<string, unknown> | null> {
+  if (!isAuthenticated()) {
+    window.location.href = '/auth/login';
+    return null;
+  }
+  const user = await refreshUser();
+  if (!user) return null;
+  const role = (user.role as string) || 'citizen';
+  const allowedList = Array.isArray(allowed) ? allowed : [allowed];
+  if (!allowedList.includes(role as Role)) {
+    window.location.href = homeForRole(role);
+    return null;
+  }
+  return user;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +149,10 @@ export async function apiGetMe() {
     clearAuth();
     throw new Error('Sesión expirada');
   }
-  return res.json();
+  const data = await res.json();
+  const user = data.user ?? data;
+  localStorage.setItem('ecoruta_user', JSON.stringify(user));
+  return user;
 }
 
 export async function apiLogout() {
