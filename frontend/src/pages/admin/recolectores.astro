@@ -4,105 +4,384 @@ import AppHeader from '../../components/AppHeader.astro';
 import { adminNav } from '../../lib/nav';
 ---
 
-<Layout title="Invitar Usuario" requiredRole="admin">
+<Layout title="Flota" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
-    <AppHeader title="Invitar usuario" nav={adminNav} />
+    <AppHeader title="Flota y recolectores" nav={adminNav} />
 
-    <main class="max-w-lg mx-auto px-4 py-6">
-      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6 flex flex-col gap-5">
+    <main class="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
+
+      <section class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 class="text-xl font-semibold text-eco-text-primary">Invitar usuario</h1>
-          <p class="text-sm text-eco-text-secondary mt-1">Crea cuentas para recolectores y administradores</p>
+          <h1 class="text-2xl font-semibold text-eco-text-primary">Flota de camiones</h1>
+          <p class="text-sm text-eco-text-secondary mt-1">
+            Cada camion crea un usuario recolector con credenciales propias.
+            El simulador descubre nuevos camiones en menos de 5 segundos.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="truck-count" class="text-sm text-eco-text-secondary">— camiones</span>
+          <button id="new-truck-btn" class="btn btn-primary text-sm px-4 py-2">
+            + Nuevo camion
+          </button>
+        </div>
+      </section>
+
+      <div id="banner" class="hidden alert alert-success"></div>
+
+      <!-- Credentials banner shown after a successful create -->
+      <div id="creds-banner" class="hidden alert alert-success text-left">
+        <p class="font-semibold mb-2">Camion creado exitosamente</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+          <div>
+            <p class="text-xs text-eco-text-secondary">ID camion</p>
+            <p id="creds-truck" class="font-mono font-semibold"></p>
+          </div>
+          <div>
+            <p class="text-xs text-eco-text-secondary">Email recolector</p>
+            <p id="creds-email" class="font-mono font-semibold truncate"></p>
+          </div>
+          <div>
+            <p class="text-xs text-eco-text-secondary">Contrasena temporal</p>
+            <p id="creds-password" class="font-mono font-semibold bg-eco-green/10 px-1.5 py-0.5 rounded inline-block"></p>
+          </div>
+        </div>
+        <p class="text-xs mt-2 opacity-80">Comparte estas credenciales una sola vez. No se podra recuperar despues.</p>
+      </div>
+
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-eco-border flex items-center justify-between gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Camiones registrados</h2>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Buscar por id, nombre o zona..."
+            class="input text-sm py-1.5 max-w-xs"
+          />
+        </div>
+        <div id="truck-list" class="divide-y divide-eco-border">
+          <div class="px-4 py-8 text-center text-sm text-eco-text-secondary">
+            Cargando flota...
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal -->
+    <div id="truck-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 py-8 overflow-y-auto">
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6 w-full max-w-lg flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h2 id="modal-title" class="text-lg font-semibold text-eco-text-primary">Nuevo camion</h2>
+          <button id="modal-close" class="text-eco-text-secondary hover:text-eco-text-primary text-2xl leading-none">&times;</button>
         </div>
 
-        <div id="error-banner" class="alert alert-error" style="display: none;"></div>
+        <div id="modal-error" class="hidden alert alert-error text-sm"></div>
 
-        <div id="success-banner" class="alert alert-success text-left" style="display: none;">
-          <p class="font-semibold mb-1">Usuario creado exitosamente</p>
-          <p class="text-sm mb-0.5">Correo: <strong id="created-email"></strong></p>
-          <p class="text-sm">Contrasena temporal: <strong id="created-password" class="font-mono bg-eco-green/10 px-1.5 py-0.5 rounded"></strong></p>
-          <p class="text-xs mt-2 opacity-80">Comparte estas credenciales con el usuario.</p>
-        </div>
-
-        <form id="invite-form" class="flex flex-col gap-4">
-          <div>
-            <label for="name" class="block text-sm font-medium text-eco-text-primary mb-1.5">Nombre completo</label>
-            <input type="text" id="name" class="input" placeholder="Juan Perez" required />
+        <form id="truck-form" class="flex flex-col gap-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-eco-text-secondary mb-1">ID camion</label>
+              <input id="f-truck-id" type="text" class="input" placeholder="TRK-31" required pattern="TRK-[0-9]+" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-eco-text-secondary mb-1">Capacidad (m3)</label>
+              <input id="f-capacity" type="number" step="0.5" class="input" placeholder="12" value="12" required />
+            </div>
           </div>
-
           <div>
-            <label for="email" class="block text-sm font-medium text-eco-text-primary mb-1.5">Correo electronico</label>
-            <input type="email" id="email" class="input" placeholder="usuario@correo.com" required />
+            <label class="block text-xs font-medium text-eco-text-secondary mb-1">Nombre comercial</label>
+            <input id="f-name" type="text" class="input" placeholder="Camion Iztapalapa 7" required />
           </div>
-
           <div>
-            <label for="role" class="block text-sm font-medium text-eco-text-primary mb-1.5">Rol</label>
-            <select id="role" class="input" required>
-              <option value="collector">Recolector</option>
-              <option value="admin">Administrador</option>
+            <label class="block text-xs font-medium text-eco-text-secondary mb-1">Alcaldia</label>
+            <select id="f-zone" class="input" required>
+              <option value="">Selecciona...</option>
+              <option value="iztapalapa">Iztapalapa</option>
+              <option value="gustavo_a_madero">Gustavo A. Madero</option>
+              <option value="alvaro_obregon">Alvaro Obregon</option>
+              <option value="tlalpan">Tlalpan</option>
+              <option value="coyoacan">Coyoacan</option>
+              <option value="cuauhtemoc">Cuauhtemoc</option>
+              <option value="xochimilco">Xochimilco</option>
+              <option value="venustiano_carranza">Venustiano Carranza</option>
+              <option value="benito_juarez">Benito Juarez</option>
+              <option value="azcapotzalco">Azcapotzalco</option>
+              <option value="miguel_hidalgo">Miguel Hidalgo</option>
+              <option value="iztacalco">Iztacalco</option>
+              <option value="tlahuac">Tlahuac</option>
+              <option value="la_magdalena_contreras">La Magdalena Contreras</option>
+              <option value="cuajimalpa_de_morelos">Cuajimalpa de Morelos</option>
+              <option value="milpa_alta">Milpa Alta</option>
             </select>
           </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-eco-text-secondary mb-1">Latitud deposito</label>
+              <input id="f-lat" type="number" step="any" class="input" placeholder="19.3574" required />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-eco-text-secondary mb-1">Longitud deposito</label>
+              <input id="f-lon" type="number" step="any" class="input" placeholder="-99.0667" required />
+            </div>
+          </div>
 
-          <button type="submit" class="btn btn-primary btn-lg w-full mt-2" id="submit-btn">
-            Crear usuario
-          </button>
+          <div id="recolector-fields">
+            <div class="border-t border-eco-border pt-3 mb-3">
+              <p class="text-xs font-semibold text-eco-text-secondary uppercase tracking-wide">Recolector asignado</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-eco-text-secondary mb-1">Nombre</label>
+                <input id="f-recolector-name" type="text" class="input" placeholder="Juan Perez" required />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-eco-text-secondary mb-1">Email</label>
+                <input id="f-recolector-email" type="email" class="input" placeholder="juan@ecoruta.mx" required />
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 mt-2">
+            <button type="button" id="modal-cancel" class="btn btn-secondary text-sm px-4 py-2">Cancelar</button>
+            <button type="submit" id="modal-submit" class="btn btn-primary text-sm px-4 py-2">Guardar</button>
+          </div>
         </form>
       </div>
-    </main>
+    </div>
   </div>
 </Layout>
 
 <script>
-  import { apiInviteUser, isAuthenticated, getUser } from '../../lib/api';
+  import {
+    apiListTrucks,
+    apiCreateTruck,
+    apiUpdateTruck,
+    apiDeleteTruck,
+  } from '../../lib/api';
+  import type { TruckOut } from '../../lib/api';
 
-  if (!isAuthenticated()) {
-    window.location.href = '/auth/login';
-  } else {
-    const user = getUser();
-    if (!user || user.role !== 'admin') {
-      window.location.href = '/auth/login';
+  let allTrucks: TruckOut[] = [];
+  let editingId: string | null = null;
+
+  const STATUS_LABELS: Record<string, string> = {
+    idle: 'En deposito',
+    en_route: 'En ruta',
+    collecting: 'Recolectando',
+    returning: 'Regresando',
+    offline: 'Inactivo',
+  };
+
+  const STATUS_CLASS: Record<string, string> = {
+    idle: 'bg-eco-bg-header text-eco-text-secondary',
+    en_route: 'bg-eco-info/15 text-eco-info',
+    collecting: 'bg-eco-warning/15 text-eco-warning',
+    returning: 'bg-eco-green/15 text-eco-green',
+    offline: 'bg-eco-danger/15 text-eco-danger',
+  };
+
+  function $(id: string): HTMLElement {
+    return document.getElementById(id)!;
+  }
+
+  function showBanner(msg: string, isError = false) {
+    const b = $('banner');
+    b.textContent = msg;
+    b.className = isError ? 'alert alert-error' : 'alert alert-success';
+    b.classList.remove('hidden');
+    setTimeout(() => b.classList.add('hidden'), 4000);
+  }
+
+  function renderList(filter: string = '') {
+    const container = $('truck-list');
+    const q = filter.trim().toLowerCase();
+    const filtered = q
+      ? allTrucks.filter(t =>
+          t.id.toLowerCase().includes(q) ||
+          t.name.toLowerCase().includes(q) ||
+          t.zone.toLowerCase().includes(q))
+      : allTrucks;
+
+    $('truck-count').textContent = `${allTrucks.length} camiones`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="px-4 py-8 text-center text-sm text-eco-text-secondary">Sin resultados.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(t => {
+      const statusLabel = STATUS_LABELS[t.status] ?? t.status;
+      const statusClass = STATUS_CLASS[t.status] ?? 'bg-eco-bg-header text-eco-text-secondary';
+      const loadPct = Math.round((t.current_load_m3 / t.capacity_m3) * 100);
+      return `
+        <div class="px-4 py-3 flex items-center justify-between gap-3 hover:bg-eco-bg-header/50 transition-colors">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-0.5">
+              <p class="text-sm font-medium text-eco-text-primary truncate">${t.name}</p>
+              <span class="text-[10px] font-mono text-eco-text-secondary">${t.id}</span>
+              <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded ${statusClass}">${statusLabel}</span>
+            </div>
+            <p class="text-xs text-eco-text-secondary">
+              ${t.zone} &middot; ${t.capacity_m3.toFixed(1)} m3 &middot; carga ${loadPct}%
+              ${t.current_route_id ? `&middot; ruta #${t.current_route_id}` : ''}
+            </p>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button data-edit="${t.id}" class="p-1.5 rounded-md text-eco-info hover:bg-eco-info/10 transition-colors" title="Editar">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button data-delete="${t.id}" class="p-1.5 rounded-md text-eco-danger hover:bg-eco-danger/10 transition-colors" title="Desactivar">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openEditModal(btn.dataset.edit!));
+    });
+    container.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', () => handleDelete(btn.dataset.delete!));
+    });
+  }
+
+  async function loadTrucks() {
+    try {
+      allTrucks = await apiListTrucks();
+      // Stable sort: by id (TRK-01, TRK-02, ...)
+      allTrucks.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+      renderList(($('search-input') as HTMLInputElement).value);
+    } catch (err) {
+      $('truck-list').innerHTML = `<div class="px-4 py-8 text-center text-sm text-eco-danger">${(err as Error).message}</div>`;
     }
   }
 
-  const inviteForm = document.getElementById('invite-form');
-  const errorBanner = document.getElementById('error-banner');
-  const successBanner = document.getElementById('success-banner');
-  const createdEmail = document.getElementById('created-email');
-  const createdPassword = document.getElementById('created-password');
-  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+  function openCreateModal() {
+    editingId = null;
+    $('modal-title').textContent = 'Nuevo camion';
+    (document.getElementById('truck-form') as HTMLFormElement).reset();
 
-  if (inviteForm) {
-    inviteForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (errorBanner) errorBanner.style.display = 'none';
-      if (successBanner) successBanner.style.display = 'none';
+    // Suggest the next available TRK id
+    const nums = allTrucks
+      .map(t => parseInt(t.id.replace(/[^0-9]/g, ''), 10))
+      .filter(n => !isNaN(n));
+    const next = (Math.max(0, ...nums) + 1).toString().padStart(2, '0');
+    ($('f-truck-id') as HTMLInputElement).value = `TRK-${next}`;
+    ($('f-capacity') as HTMLInputElement).value = '12';
 
-      const name = (document.getElementById('name') as HTMLInputElement).value;
-      const email = (document.getElementById('email') as HTMLInputElement).value;
-      const role = (document.getElementById('role') as HTMLSelectElement).value;
+    // Show recolector fields (only on create)
+    $('recolector-fields').classList.remove('hidden');
+    ($('f-recolector-name') as HTMLInputElement).required = true;
+    ($('f-recolector-email') as HTMLInputElement).required = true;
+    ($('f-truck-id') as HTMLInputElement).disabled = false;
 
-      const originalText = submitBtn.innerText;
-      submitBtn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Creando...`;
-      submitBtn.disabled = true;
-
-      try {
-        const data = await apiInviteUser(name, email, role);
-
-        if (createdEmail) createdEmail.textContent = data.email;
-        if (createdPassword) createdPassword.textContent = data.temporary_password;
-        if (successBanner) successBanner.style.display = 'block';
-
-        (document.getElementById('name') as HTMLInputElement).value = '';
-        (document.getElementById('email') as HTMLInputElement).value = '';
-      } catch (err: any) {
-        if (errorBanner) {
-          errorBanner.textContent = err.message;
-          errorBanner.style.display = 'block';
-        }
-      } finally {
-        submitBtn.innerText = originalText;
-        submitBtn.disabled = false;
-      }
-    });
+    $('modal-error').classList.add('hidden');
+    $('truck-modal').classList.remove('hidden');
   }
+
+  function openEditModal(truckId: string) {
+    const t = allTrucks.find(x => x.id === truckId);
+    if (!t) return;
+    editingId = truckId;
+    $('modal-title').textContent = `Editar ${truckId}`;
+    ($('f-truck-id') as HTMLInputElement).value = t.id;
+    ($('f-truck-id') as HTMLInputElement).disabled = true;
+    ($('f-name') as HTMLInputElement).value = t.name;
+    ($('f-zone') as HTMLSelectElement).value = t.zone;
+    ($('f-capacity') as HTMLInputElement).value = String(t.capacity_m3);
+    ($('f-lat') as HTMLInputElement).value = String(t.depot_lat);
+    ($('f-lon') as HTMLInputElement).value = String(t.depot_lon);
+
+    // Hide recolector fields on edit (recolector cannot be changed via PATCH)
+    $('recolector-fields').classList.add('hidden');
+    ($('f-recolector-name') as HTMLInputElement).required = false;
+    ($('f-recolector-email') as HTMLInputElement).required = false;
+
+    $('modal-error').classList.add('hidden');
+    $('truck-modal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    $('truck-modal').classList.add('hidden');
+    editingId = null;
+  }
+
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    const errBox = $('modal-error');
+    errBox.classList.add('hidden');
+
+    const id = ($('f-truck-id') as HTMLInputElement).value.trim();
+    const name = ($('f-name') as HTMLInputElement).value.trim();
+    const zone = ($('f-zone') as HTMLSelectElement).value;
+    const capacity_m3 = parseFloat(($('f-capacity') as HTMLInputElement).value);
+    const depot_lat = parseFloat(($('f-lat') as HTMLInputElement).value);
+    const depot_lon = parseFloat(($('f-lon') as HTMLInputElement).value);
+
+    if (!id || !name || !zone || isNaN(capacity_m3) || isNaN(depot_lat) || isNaN(depot_lon)) {
+      errBox.textContent = 'Completa todos los campos del camion';
+      errBox.classList.remove('hidden');
+      return;
+    }
+
+    const submitBtn = $('modal-submit') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+
+    try {
+      if (editingId) {
+        await apiUpdateTruck(editingId, { name, zone, capacity_m3, depot_lat, depot_lon });
+        showBanner(`Camion ${editingId} actualizado`);
+      } else {
+        const recolector_name = ($('f-recolector-name') as HTMLInputElement).value.trim();
+        const recolector_email = ($('f-recolector-email') as HTMLInputElement).value.trim();
+        if (!recolector_name || !recolector_email) {
+          throw new Error('Completa los datos del recolector');
+        }
+        const result = await apiCreateTruck({
+          id,
+          name,
+          zone,
+          capacity_m3,
+          depot_lat,
+          depot_lon,
+          recolector_email,
+          recolector_name,
+        });
+        // Show credentials banner
+        $('creds-truck').textContent = result.truck.id;
+        $('creds-email').textContent = result.recolector_email;
+        $('creds-password').textContent = result.recolector_temp_password;
+        $('creds-banner').classList.remove('hidden');
+      }
+      closeModal();
+      await loadTrucks();
+    } catch (err) {
+      errBox.textContent = (err as Error).message;
+      errBox.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Guardar';
+    }
+  }
+
+  async function handleDelete(truckId: string) {
+    if (!confirm(`Desactivar el camion ${truckId}?\nSe marcara como offline y dejara de recibir rutas.`)) return;
+    try {
+      await apiDeleteTruck(truckId);
+      showBanner(`Camion ${truckId} desactivado`);
+      await loadTrucks();
+    } catch (err) {
+      showBanner((err as Error).message, true);
+    }
+  }
+
+  // Wire UI
+  $('new-truck-btn').addEventListener('click', openCreateModal);
+  $('modal-close').addEventListener('click', closeModal);
+  $('modal-cancel').addEventListener('click', closeModal);
+  $('truck-form').addEventListener('submit', handleSubmit);
+  $('search-input').addEventListener('input', (e) => {
+    renderList((e.target as HTMLInputElement).value);
+  });
+
+  loadTrucks();
 </script>

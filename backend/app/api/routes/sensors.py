@@ -44,6 +44,42 @@ async def verify_sensor_token(
         )
     return credentials.credentials
 
+
+async def verify_sensor_or_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(sensor_security),
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """Hybrid auth: accept either the sensor api key OR a valid admin JWT.
+
+    Used by sensor registration endpoints so the dashboard can create
+    sensors via the same path the simulator uses, without giving the
+    dashboard the shared sensor secret.
+    """
+    expected = settings.sensor_api_key or "ecoruta-sensor-secret-2026"
+    token = credentials.credentials
+    if token == expected:
+        return "sensor"
+
+    # Try as JWT admin
+    from app.api.routes.auth import _decode_jwt
+    try:
+        payload = _decode_jwt(token)
+        sub = payload.get("sub")
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalido (no es sensor ni admin)",
+        )
+
+    result = await db.execute(select(User).where(User.sub == sub))
+    user = result.scalar_one_or_none()
+    if not user or user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador",
+        )
+    return "admin"
+
 # ---------------------------------------------------------------------------
 # Seed demo data — CDMX alcaldías
 # ---------------------------------------------------------------------------
@@ -93,9 +129,11 @@ async def seed_sensor_registry(db: AsyncSession) -> None:
 @router.post("/register", response_model=SensorInfo)
 async def register_sensor(
     reg: SensorRegistration,
-    _token: str = Depends(verify_sensor_token),
+    _auth: str = Depends(verify_sensor_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Register or upsert a sensor. Admin (via JWT) and the simulator
+    (via sensor api key) both share this endpoint."""
     data = reg.model_dump()
     stmt = pg_insert(Sensor).values(**data)
     stmt = stmt.on_conflict_do_update(

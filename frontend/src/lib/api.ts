@@ -243,3 +243,134 @@ export async function apiOptimizeRoutes(): Promise<{ generated: number; skipped:
   if (!res.ok) throw new Error(data.detail || 'Error al optimizar rutas');
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Trucks CRUD (admin)
+// ---------------------------------------------------------------------------
+
+export interface TruckCreatePayload {
+  id: string;
+  name: string;
+  zone: string;
+  capacity_m3: number;
+  depot_lat: number;
+  depot_lon: number;
+  recolector_email: string;
+  recolector_name: string;
+}
+
+export interface TruckCreateResponse {
+  truck: TruckOut;
+  recolector_email: string;
+  recolector_temp_password: string;
+}
+
+export interface TruckUpdatePayload {
+  name?: string;
+  zone?: string;
+  capacity_m3?: number;
+  depot_lat?: number;
+  depot_lon?: number;
+  status?: string;
+}
+
+export async function apiCreateTruck(payload: TruckCreatePayload): Promise<TruckCreateResponse> {
+  const res = await apiFetch('/trucks/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Error al crear camion');
+  return data;
+}
+
+export async function apiUpdateTruck(truckId: string, payload: TruckUpdatePayload): Promise<TruckOut> {
+  const res = await apiFetch(`/trucks/${truckId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Error al actualizar camion');
+  return data;
+}
+
+export async function apiDeleteTruck(truckId: string): Promise<void> {
+  const res = await apiFetch(`/trucks/${truckId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Error al desactivar camion');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sensors CRUD (admin)
+// ---------------------------------------------------------------------------
+
+export interface SensorInfo {
+  sensor_id: string;
+  container_id: string;
+  latitude: number;
+  longitude: number;
+  zone: string;
+  activo?: boolean;
+  status?: string;
+}
+
+export interface SensorRegistrationPayload {
+  sensor_id: string;
+  container_id: string;
+  latitude: number;
+  longitude: number;
+  zone: string;
+}
+
+export interface SensorUpdatePayload {
+  latitude?: number;
+  longitude?: number;
+  zone?: string;
+  activo?: boolean;
+  status?: string;
+}
+
+export async function apiListSensors(): Promise<SensorInfo[]> {
+  const res = await apiFetch('/sensors/registry');
+  if (!res.ok) throw new Error('Error al listar sensores');
+  return res.json();
+}
+
+export async function apiGetSensor(sensorId: string): Promise<SensorInfo> {
+  const res = await apiFetch(`/sensors/registry/${sensorId}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Sensor no encontrado');
+  }
+  return res.json();
+}
+
+export async function apiCreateSensor(payload: SensorRegistrationPayload): Promise<SensorInfo> {
+  const res = await apiFetch('/sensors/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Error al registrar sensor');
+  return data;
+}
+
+export async function apiUpdateSensor(sensorId: string, payload: SensorUpdatePayload): Promise<SensorInfo> {
+  const res = await apiFetch(`/sensors/registry/${sensorId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Error al actualizar sensor');
+  return data;
+}
+
+export async function apiDeleteSensor(sensorId: string): Promise<void> {
+  const res = await apiFetch(`/sensors/registry/${sensorId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Error al desactivar sensor');
+  }
+}

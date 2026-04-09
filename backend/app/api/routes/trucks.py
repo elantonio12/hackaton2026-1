@@ -12,6 +12,7 @@ used by the IoT sensors. The frontend uses regular JWT auth.
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -19,14 +20,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.routes.auth import get_current_user
+from app.api.routes.auth import _hash_password, get_current_user, require_admin
 from app.api.routes.sensors import verify_sensor_token
 from app.db.database import get_db
 from app.db.models import ContainerReading, Route, Truck, User
 from app.models.schemas import (
     ActiveRouteOut,
+    TruckCreate,
+    TruckCreateResponse,
     TruckLocationUpdate,
     TruckOut,
+    TruckUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,6 +127,127 @@ async def get_truck_route(truck_id: str, db: AsyncSession = Depends(get_db)):
     if not route:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
     return _route_payload(route)
+
+
+# ---------------------------------------------------------------------------
+# Admin CRUD (admin JWT)
+# ---------------------------------------------------------------------------
+
+@router.post("/", response_model=TruckCreateResponse, status_code=status.HTTP_201_CREATED)
+async def create_truck(
+    payload: TruckCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Create a new truck and its assigned collector user atomically.
+
+    Returns the truck plus a one-time temporary password for the new
+    collector. The admin should hand the password to the recolector;
+    they can change it later (no password reset flow exists yet).
+
+    The truck simulator on vps2 will pick up the new truck on its
+    next tick (5s) via its existing /trucks/ polling loop.
+    """
+    # Reject duplicate truck id
+    existing = await db.execute(select(Truck).where(Truck.id == payload.id))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ya existe un camion con id {payload.id}",
+        )
+
+    email = payload.recolector_email.lower()
+    sub = f"local|{email}"
+
+    # Reject duplicate user email
+    existing_user = await db.execute(select(User).where(User.email == email))
+    if existing_user.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ya existe un usuario con email {email}",
+        )
+
+    temp_password = secrets.token_urlsafe(10)
+    now = datetime.now(timezone.utc)
+
+    new_user = User(
+        sub=sub,
+        email=email,
+        name=payload.recolector_name,
+        picture=None,
+        role="collector",
+        provider="invite",
+        email_verified=True,
+        password_hash=_hash_password(temp_password),
+        created_at=now,
+        last_login=now,
+    )
+    db.add(new_user)
+
+    new_truck = Truck(
+        id=payload.id,
+        name=payload.name,
+        zone=payload.zone,
+        capacity_m3=payload.capacity_m3,
+        current_load_m3=0.0,
+        depot_lat=payload.depot_lat,
+        depot_lon=payload.depot_lon,
+        current_lat=payload.depot_lat,
+        current_lon=payload.depot_lon,
+        status="idle",
+        assigned_user_sub=sub,
+    )
+    db.add(new_truck)
+
+    await db.commit()
+    await db.refresh(new_truck)
+
+    logger.info("[trucks] Admin created %s assigned to %s", payload.id, email)
+
+    return TruckCreateResponse(
+        truck=_truck_payload(new_truck),
+        recolector_email=email,
+        recolector_temp_password=temp_password,
+    )
+
+
+@router.patch("/{truck_id}", response_model=TruckOut)
+async def patch_truck(
+    truck_id: str,
+    updates: TruckUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Update mutable fields of a truck (name, zone, depot, capacity, status)."""
+    truck = await _get_truck(db, truck_id)
+    if not truck:
+        raise HTTPException(status_code=404, detail="Camion no encontrado")
+    for field, value in updates.model_dump(exclude_unset=True).items():
+        setattr(truck, field, value)
+    truck.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(truck)
+    return _truck_payload(truck)
+
+
+@router.delete("/{truck_id}")
+async def delete_truck(
+    truck_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Soft-delete a truck: set status to offline and clear current route.
+    The truck simulator will stop advancing it because the discovery loop
+    only acts on trucks the backend exposes — and offline trucks remain
+    listed but the sim treats them as inactive."""
+    truck = await _get_truck(db, truck_id)
+    if not truck:
+        raise HTTPException(status_code=404, detail="Camion no encontrado")
+    truck.status = "offline"
+    truck.current_route_id = None
+    truck.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"status": "offline", "id": truck_id}
 
 
 # ---------------------------------------------------------------------------

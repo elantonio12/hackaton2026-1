@@ -46,7 +46,8 @@ class SensorRegistration(BaseModel):
 
 
 class SensorInfo(SensorRegistration):
-    pass
+    activo: bool = True
+    status: str = "activo"
 
 
 class ContainerReading(BaseModel):
@@ -220,6 +221,36 @@ class TruckLocationUpdate(BaseModel):
     status: Optional[str] = None
     current_load_m3: Optional[float] = None
     current_route_id: Optional[int] = None
+
+
+class TruckCreate(BaseModel):
+    """Admin payload to create a new truck and its assigned collector."""
+    id: str  # e.g. TRK-31
+    name: str
+    zone: str
+    capacity_m3: float = 12.0
+    depot_lat: float
+    depot_lon: float
+    recolector_email: str
+    recolector_name: str
+
+
+class TruckCreateResponse(BaseModel):
+    """Returned to admin after creating a truck. Includes the temporary
+    password for the auto-created collector user (one-time view)."""
+    truck: dict
+    recolector_email: str
+    recolector_temp_password: str
+
+
+class TruckUpdate(BaseModel):
+    """Admin payload to patch a truck's mutable fields."""
+    name: Optional[str] = None
+    zone: Optional[str] = None
+    capacity_m3: Optional[float] = None
+    depot_lat: Optional[float] = None
+    depot_lon: Optional[float] = None
+    status: Optional[str] = None
 
 
 class TruckRouteStop(BaseModel):

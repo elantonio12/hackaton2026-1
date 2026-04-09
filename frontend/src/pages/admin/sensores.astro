@@ -6,12 +6,299 @@ import { adminNav } from '../../lib/nav';
 
 <Layout title="Sensores" requiredRole="admin">
   <div class="h-app overflow-y-auto bg-eco-bg">
-    <AppHeader title="Sensores" nav={adminNav} />
-    <main class="max-w-6xl mx-auto px-4 py-6">
-      <h1 class="text-2xl font-semibold text-eco-text-primary mb-4">Registro de sensores IoT</h1>
-      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6">
-        <p class="text-sm text-eco-text-secondary">CRUD de sensores (en construccion).</p>
-      </div>
+    <AppHeader title="Sensores IoT" nav={adminNav} />
+
+    <main class="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
+
+      <!-- Header + summary -->
+      <section class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-semibold text-eco-text-primary">Registro de sensores IoT</h1>
+          <p class="text-sm text-eco-text-secondary mt-1">
+            Cada sensor mide el nivel de un contenedor.
+            Al crear uno aqui, el simulador lo descubre en menos de 60s.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="sensor-count" class="text-sm text-eco-text-secondary">— sensores</span>
+          <button id="new-sensor-btn" class="btn btn-primary text-sm px-4 py-2">
+            + Nuevo sensor
+          </button>
+        </div>
+      </section>
+
+      <!-- Banner area -->
+      <div id="banner" class="hidden alert alert-success"></div>
+
+      <!-- List -->
+      <section class="bg-eco-bg-panel border border-eco-border rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-eco-border flex items-center justify-between gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Sensores registrados</h2>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Buscar por id, contenedor o zona..."
+            class="input text-sm py-1.5 max-w-xs"
+          />
+        </div>
+        <div id="sensor-list" class="divide-y divide-eco-border max-h-[600px] overflow-y-auto">
+          <div class="px-4 py-8 text-center text-sm text-eco-text-secondary">
+            Cargando sensores...
+          </div>
+        </div>
+      </section>
     </main>
+
+    <!-- Create / edit modal -->
+    <div id="sensor-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4">
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-6 w-full max-w-md flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h2 id="modal-title" class="text-lg font-semibold text-eco-text-primary">Nuevo sensor</h2>
+          <button id="modal-close" class="text-eco-text-secondary hover:text-eco-text-primary text-2xl leading-none">&times;</button>
+        </div>
+
+        <div id="modal-error" class="hidden alert alert-error text-sm"></div>
+
+        <form id="sensor-form" class="flex flex-col gap-3">
+          <div>
+            <label class="block text-xs font-medium text-eco-text-secondary mb-1">ID del sensor</label>
+            <input id="f-sensor-id" type="text" class="input" placeholder="SENSOR-CNT-99999" required />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-eco-text-secondary mb-1">ID del contenedor</label>
+            <input id="f-container-id" type="text" class="input" placeholder="CNT-99999" required />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-eco-text-secondary mb-1">Latitud</label>
+              <input id="f-lat" type="number" step="any" class="input" placeholder="19.4326" required />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-eco-text-secondary mb-1">Longitud</label>
+              <input id="f-lon" type="number" step="any" class="input" placeholder="-99.1332" required />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-eco-text-secondary mb-1">Alcaldia</label>
+            <select id="f-zone" class="input" required>
+              <option value="">Selecciona...</option>
+              <option value="iztapalapa">Iztapalapa</option>
+              <option value="gustavo_a_madero">Gustavo A. Madero</option>
+              <option value="alvaro_obregon">Alvaro Obregon</option>
+              <option value="tlalpan">Tlalpan</option>
+              <option value="coyoacan">Coyoacan</option>
+              <option value="cuauhtemoc">Cuauhtemoc</option>
+              <option value="xochimilco">Xochimilco</option>
+              <option value="venustiano_carranza">Venustiano Carranza</option>
+              <option value="benito_juarez">Benito Juarez</option>
+              <option value="azcapotzalco">Azcapotzalco</option>
+              <option value="miguel_hidalgo">Miguel Hidalgo</option>
+              <option value="iztacalco">Iztacalco</option>
+              <option value="tlahuac">Tlahuac</option>
+              <option value="la_magdalena_contreras">La Magdalena Contreras</option>
+              <option value="cuajimalpa_de_morelos">Cuajimalpa de Morelos</option>
+              <option value="milpa_alta">Milpa Alta</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-end gap-2 mt-2">
+            <button type="button" id="modal-cancel" class="btn btn-secondary text-sm px-4 py-2">Cancelar</button>
+            <button type="submit" id="modal-submit" class="btn btn-primary text-sm px-4 py-2">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </Layout>
+
+<script>
+  import {
+    apiListSensors,
+    apiCreateSensor,
+    apiUpdateSensor,
+    apiDeleteSensor,
+  } from '../../lib/api';
+  import type { SensorInfo } from '../../lib/api';
+
+  let allSensors: SensorInfo[] = [];
+  let editingId: string | null = null;
+
+  function $(id: string): HTMLElement {
+    return document.getElementById(id)!;
+  }
+
+  function showBanner(msg: string, isError = false) {
+    const b = $('banner');
+    b.textContent = msg;
+    b.className = isError ? 'alert alert-error' : 'alert alert-success';
+    b.classList.remove('hidden');
+    setTimeout(() => b.classList.add('hidden'), 4000);
+  }
+
+  function renderList(filter: string = '') {
+    const container = $('sensor-list');
+    const q = filter.trim().toLowerCase();
+    const filtered = q
+      ? allSensors.filter(s =>
+          s.sensor_id.toLowerCase().includes(q) ||
+          s.container_id.toLowerCase().includes(q) ||
+          s.zone.toLowerCase().includes(q))
+      : allSensors;
+
+    $('sensor-count').textContent = `${allSensors.length.toLocaleString()} sensores`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="px-4 py-8 text-center text-sm text-eco-text-secondary">Sin resultados.</div>';
+      return;
+    }
+
+    // Render up to 200 to keep DOM light — encourage filter for the rest
+    const slice = filtered.slice(0, 200);
+    container.innerHTML = slice.map(s => {
+      const isActive = s.activo !== false;
+      const statusClass = isActive ? 'bg-eco-green/15 text-eco-green' : 'bg-eco-bg-header text-eco-text-secondary';
+      const statusLabel = isActive ? 'activo' : 'inactivo';
+      return `
+        <div class="px-4 py-3 flex items-center justify-between gap-3 hover:bg-eco-bg-header/50 transition-colors">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-0.5">
+              <p class="text-sm font-medium text-eco-text-primary truncate font-mono">${s.sensor_id}</p>
+              <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded ${statusClass}">${statusLabel}</span>
+            </div>
+            <p class="text-xs text-eco-text-secondary">
+              ${s.container_id} &middot; ${s.zone} &middot; ${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}
+            </p>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button data-edit="${s.sensor_id}" class="p-1.5 rounded-md text-eco-info hover:bg-eco-info/10 transition-colors" title="Editar">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button data-delete="${s.sensor_id}" class="p-1.5 rounded-md text-eco-danger hover:bg-eco-danger/10 transition-colors" title="Desactivar">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </div>
+        </div>`;
+    }).join('') + (filtered.length > 200
+      ? `<div class="px-4 py-3 text-center text-xs text-eco-text-secondary border-t border-eco-border">Mostrando 200 de ${filtered.length}. Usa el buscador para filtrar.</div>`
+      : '');
+
+    // Wire row buttons
+    container.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openEditModal(btn.dataset.edit!));
+    });
+    container.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', () => handleDelete(btn.dataset.delete!));
+    });
+  }
+
+  async function loadSensors() {
+    try {
+      allSensors = await apiListSensors();
+      renderList(($('search-input') as HTMLInputElement).value);
+    } catch (err) {
+      $('sensor-list').innerHTML = `<div class="px-4 py-8 text-center text-sm text-eco-danger">${(err as Error).message}</div>`;
+    }
+  }
+
+  function openCreateModal() {
+    editingId = null;
+    $('modal-title').textContent = 'Nuevo sensor';
+    ($('f-sensor-id') as HTMLInputElement).disabled = false;
+    ($('f-container-id') as HTMLInputElement).disabled = false;
+    (document.getElementById('sensor-form') as HTMLFormElement).reset();
+
+    // Pre-fill with a sensible suggestion based on existing IDs
+    const maxNum = allSensors
+      .map(s => parseInt(s.container_id.replace(/[^0-9]/g, ''), 10))
+      .filter(n => !isNaN(n))
+      .reduce((a, b) => Math.max(a, b), 0);
+    const next = (maxNum + 1).toString().padStart(5, '0');
+    ($('f-container-id') as HTMLInputElement).value = `CNT-${next}`;
+    ($('f-sensor-id') as HTMLInputElement).value = `SENSOR-CNT-${next}`;
+
+    $('modal-error').classList.add('hidden');
+    $('sensor-modal').classList.remove('hidden');
+  }
+
+  function openEditModal(sensorId: string) {
+    const s = allSensors.find(x => x.sensor_id === sensorId);
+    if (!s) return;
+    editingId = sensorId;
+    $('modal-title').textContent = `Editar ${sensorId}`;
+    ($('f-sensor-id') as HTMLInputElement).value = s.sensor_id;
+    ($('f-sensor-id') as HTMLInputElement).disabled = true;
+    ($('f-container-id') as HTMLInputElement).value = s.container_id;
+    ($('f-container-id') as HTMLInputElement).disabled = true;
+    ($('f-lat') as HTMLInputElement).value = String(s.latitude);
+    ($('f-lon') as HTMLInputElement).value = String(s.longitude);
+    ($('f-zone') as HTMLSelectElement).value = s.zone;
+    $('modal-error').classList.add('hidden');
+    $('sensor-modal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    $('sensor-modal').classList.add('hidden');
+    editingId = null;
+  }
+
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    const errBox = $('modal-error');
+    errBox.classList.add('hidden');
+
+    const sensor_id = ($('f-sensor-id') as HTMLInputElement).value.trim();
+    const container_id = ($('f-container-id') as HTMLInputElement).value.trim();
+    const latitude = parseFloat(($('f-lat') as HTMLInputElement).value);
+    const longitude = parseFloat(($('f-lon') as HTMLInputElement).value);
+    const zone = ($('f-zone') as HTMLSelectElement).value;
+
+    if (!sensor_id || !container_id || !zone || isNaN(latitude) || isNaN(longitude)) {
+      errBox.textContent = 'Completa todos los campos';
+      errBox.classList.remove('hidden');
+      return;
+    }
+
+    const submitBtn = $('modal-submit') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+
+    try {
+      if (editingId) {
+        await apiUpdateSensor(editingId, { latitude, longitude, zone });
+        showBanner(`Sensor ${editingId} actualizado`);
+      } else {
+        await apiCreateSensor({ sensor_id, container_id, latitude, longitude, zone });
+        showBanner(`Sensor ${sensor_id} creado. El simulador lo descubrira en menos de 60s.`);
+      }
+      closeModal();
+      await loadSensors();
+    } catch (err) {
+      errBox.textContent = (err as Error).message;
+      errBox.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Guardar';
+    }
+  }
+
+  async function handleDelete(sensorId: string) {
+    if (!confirm(`Desactivar el sensor ${sensorId}?\nDejara de simularse en menos de 60s.`)) return;
+    try {
+      await apiDeleteSensor(sensorId);
+      showBanner(`Sensor ${sensorId} desactivado`);
+      await loadSensors();
+    } catch (err) {
+      showBanner((err as Error).message, true);
+    }
+  }
+
+  // Wire UI
+  $('new-sensor-btn').addEventListener('click', openCreateModal);
+  $('modal-close').addEventListener('click', closeModal);
+  $('modal-cancel').addEventListener('click', closeModal);
+  $('sensor-form').addEventListener('submit', handleSubmit);
+  $('search-input').addEventListener('input', (e) => {
+    renderList((e.target as HTMLInputElement).value);
+  });
+
+  loadSensors();
+</script>
