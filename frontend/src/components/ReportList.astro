@@ -1,0 +1,38 @@
+---
+// Reportes ciudadanos en tiempo real
+---
+
+<div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+  <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Reportes ciudadanos</h2>
+  <ul id="report-list" class="flex flex-col gap-2">
+    <li class="text-xs text-eco-text-secondary">Cargando...</li>
+  </ul>
+</div>
+
+<script>
+  async function loadReports() {
+    const list = document.getElementById('report-list')!;
+    try {
+      const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+      const res  = await fetch(`${API}/api/v1/reports/citizen`);
+      const data: any[] = await res.json();
+
+      if (data.length === 0) {
+        list.innerHTML = '<li class="text-xs text-eco-text-secondary">Sin reportes por el momento.</li>';
+        return;
+      }
+
+      const recent = [...data].reverse().slice(0, 6);
+      list.innerHTML = recent.map(r => `
+        <li class="rounded-lg bg-eco-bg-header px-3 py-2">
+          <p class="text-sm text-eco-text-primary">${r.description}</p>
+          <p class="text-xs text-eco-text-secondary mt-0.5">Zona ${r.zone} · ${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}</p>
+        </li>`).join('');
+    } catch {
+      list.innerHTML = '<li class="text-xs text-eco-danger">Error al cargar reportes</li>';
+    }
+  }
+
+  loadReports();
+  setInterval(loadReports, 15_000);
+</script>

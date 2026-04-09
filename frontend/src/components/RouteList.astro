@@ -1,0 +1,57 @@
+---
+// Rutas optimizadas — se generan llamando al backend
+---
+
+<div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Rutas optimizadas</h2>
+    <button
+      id="optimize-btn"
+      class="text-xs px-3 py-1 rounded-lg bg-eco-green text-white font-medium active:scale-95 transition-transform"
+    >
+      Generar rutas
+    </button>
+  </div>
+  <ul id="route-list" class="flex flex-col gap-2">
+    <li class="text-xs text-eco-text-secondary">Presiona "Generar rutas" para calcular.</li>
+  </ul>
+</div>
+
+<script>
+  document.getElementById('optimize-btn')!.addEventListener('click', async () => {
+    const list = document.getElementById('route-list')!;
+    const btn  = document.getElementById('optimize-btn') as HTMLButtonElement;
+    btn.textContent = 'Calculando...';
+    btn.disabled = true;
+    list.innerHTML = '<li class="text-xs text-eco-text-secondary">Calculando rutas con IA...</li>';
+
+    try {
+      const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${API}/api/v1/routes/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      const routes: any[] = data.routes ?? [];
+
+      if (routes.length === 0) {
+        list.innerHTML = '<li class="text-xs text-eco-text-secondary">No hay contenedores críticos para rutear.</li>';
+        return;
+      }
+
+      list.innerHTML = routes.map(r => `
+        <li class="flex items-center justify-between rounded-lg bg-eco-bg-header px-3 py-2">
+          <div>
+            <p class="text-sm font-medium text-eco-text-primary">${r.vehicle_id}</p>
+            <p class="text-xs text-eco-text-secondary">${r.total_distance_km} km · ${r.estimated_time_min} min</p>
+          </div>
+          <span class="text-xs bg-eco-green text-white px-2 py-0.5 rounded-full">${r.containers_visited} paradas</span>
+        </li>`).join('');
+    } catch {
+      list.innerHTML = '<li class="text-xs text-eco-danger">Error al generar rutas</li>';
+    } finally {
+      btn.textContent = 'Generar rutas';
+      btn.disabled = false;
+    }
+  });
+</script>

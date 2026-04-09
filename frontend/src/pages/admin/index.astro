@@ -1,0 +1,164 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import StatCard from '../../components/StatCard.astro';
+import CriticalList from '../../components/CriticalList.astro';
+import RouteList from '../../components/RouteList.astro';
+import ReportList from '../../components/ReportList.astro';
+---
+
+<Layout title="Dashboard">
+  <div class="h-app overflow-y-auto bg-eco-bg">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-10 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+        </svg>
+        <span class="font-medium text-eco-text-primary text-base">EcoRuta</span>
+        <span class="text-xs text-eco-text-secondary hidden sm:inline">— Panel de administración</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="live-dot" class="w-2 h-2 rounded-full bg-eco-green animate-pulse"></span>
+        <span class="text-xs text-eco-text-secondary">En vivo</span>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-5 flex flex-col gap-5">
+
+      <!-- Métricas -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard
+          label="Total contenedores"
+          value="50"
+          sub="3 zonas CDMX"
+        />
+        <StatCard
+          id="stat-critical"
+          label="Críticos (+80%)"
+          value="—"
+          sub="Requieren atención"
+          color="danger"
+        />
+        <StatCard
+          label="Zonas activas"
+          value="3"
+          sub="Centro · Norte · Sur"
+          color="success"
+        />
+        <StatCard
+          id="stat-reports"
+          label="Reportes ciudadanos"
+          value="—"
+          sub="Total acumulado"
+          color="warning"
+        />
+      </section>
+
+      <!-- Mapa + Críticos -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Mapa -->
+        <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+          <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Mapa de contenedores — CDMX</h2>
+          <div id="map" class="w-full h-64 rounded-lg z-0"></div>
+          <div class="flex gap-4 text-xs text-eco-text-secondary">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-danger inline-block"></span>Crítico +80%</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-warning inline-block"></span>Medio 50–80%</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-eco-green inline-block"></span>Normal &lt;50%</span>
+          </div>
+        </div>
+
+        <CriticalList />
+      </section>
+
+      <!-- Rutas + Reportes -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <RouteList />
+        <ReportList />
+      </section>
+
+    </main>
+  </div>
+</Layout>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<script>
+  // ── Mapa Leaflet ──────────────────────────────────────────────
+  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
+
+  const map = L.map('map', { zoomControl: true }).setView([19.432, -99.133], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(map);
+
+  const markers: any[] = [];
+
+  function markerColor(fill: number) {
+    if (fill >= 0.8) return '#ef4444';
+    if (fill >= 0.5) return '#f59e0b';
+    return '#16a34a';
+  }
+
+  function circleIcon(color: string) {
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+  }
+
+  async function loadMap() {
+    const API = (window as any).__API__ ?? 'http://localhost:8000';
+    try {
+      const res = await fetch(`${API}/api/v1/containers/readings`);
+      const containers: any[] = await res.json();
+
+      // Limpiar markers anteriores
+      markers.forEach(m => m.remove());
+      markers.length = 0;
+
+      containers.forEach(c => {
+        const color = markerColor(c.fill_level);
+        const m = L.marker([c.latitude, c.longitude], { icon: circleIcon(color) })
+          .bindPopup(`
+            <b>${c.container_id}</b><br/>
+            Zona: ${c.zone}<br/>
+            Nivel: ${Math.round(c.fill_level * 100)}%<br/>
+            <small>${new Date(c.timestamp).toLocaleTimeString('es-MX')}</small>
+          `)
+          .addTo(map);
+        markers.push(m);
+      });
+    } catch (e) {
+      console.warn('No se pudo cargar el mapa:', e);
+    }
+  }
+
+  loadMap();
+  setInterval(loadMap, 10_000);
+
+  // ── Métricas dinámicas ────────────────────────────────────────
+  async function loadStats() {
+    const API = 'http://localhost:8000';
+    try {
+      const [critRes, repRes] = await Promise.all([
+        fetch(`${API}/api/v1/containers/critical?threshold=0.8`),
+        fetch(`${API}/api/v1/reports/citizen`),
+      ]);
+      const critData = await critRes.json();
+      const repData  = await repRes.json();
+
+      const critEl = document.querySelector('#stat-critical .text-3xl');
+      const repEl  = document.querySelector('#stat-reports .text-3xl');
+      if (critEl) critEl.textContent = critData.count ?? '—';
+      if (repEl)  repEl.textContent  = Array.isArray(repData) ? repData.length : '—';
+    } catch { /* silencioso */ }
+  }
+
+  loadStats();
+  setInterval(loadStats, 10_000);
+</script>
