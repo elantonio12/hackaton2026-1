@@ -2,12 +2,131 @@
 import Layout from '../../layouts/Layout.astro';
 ---
 
-<Layout title="Mapa">
-  <main class="h-full">
-    <h1 class="sr-only">Mapa de Recolección</h1>
-    <!-- TODO: Mapa interactivo con ruta y contenedores -->
-    <div class="h-full w-full bg-eco-bg-header flex items-center justify-center">
-      <p class="text-eco-text-secondary">Mapa</p>
+<Layout title="Mapa de Ruta">
+  <div class="h-app flex flex-col bg-eco-bg">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-20 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <a href="/recolector/ruta" class="text-eco-text-secondary hover:text-eco-text-primary">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+          </svg>
+        </a>
+        <span class="font-medium text-eco-text-primary text-base">Mapa de Ruta</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="flex gap-2 text-xs text-eco-text-secondary">
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-danger inline-block"></span>+80%</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-warning inline-block"></span>50-80%</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-eco-green inline-block"></span>&lt;50%</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Map fills remaining space -->
+    <div id="map" class="flex-1 z-0"></div>
+
+    <!-- Bottom info bar -->
+    <div id="info-bar" class="bg-eco-bg-panel border-t border-eco-border px-4 py-3 flex items-center justify-between text-sm hidden">
+      <span class="text-eco-text-secondary">Paradas: <strong id="info-stops" class="text-eco-text-primary">0</strong></span>
+      <span class="text-eco-text-secondary">Distancia: <strong id="info-km" class="text-eco-info">—</strong> km</span>
+      <span class="text-eco-text-secondary">Tiempo: <strong id="info-time" class="text-eco-warning">—</strong> min</span>
     </div>
-  </main>
+  </div>
 </Layout>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<script>
+  import L from 'https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js';
+
+  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+
+  const map = L.map('map', { zoomControl: true }).setView([19.432, -99.133], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(map);
+
+  function markerColor(fill: number) {
+    if (fill >= 0.8) return '#ef4444';
+    if (fill >= 0.5) return '#f59e0b';
+    return '#16a34a';
+  }
+
+  function numberedIcon(num: number, color: string) {
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:700">${num}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+  }
+
+  async function loadRoute() {
+    // Try sessionStorage first (from ruta page)
+    const cached = sessionStorage.getItem('ecoruta_stops');
+    let stops: any[] = [];
+    let routeMeta: any = null;
+
+    if (cached) {
+      stops = JSON.parse(cached);
+    } else {
+      // Generate route directly
+      try {
+        const res = await fetch(`${API}/api/v1/routes/optimize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        const routes: any[] = data.routes ?? [];
+        if (routes.length > 0) {
+          routeMeta = routes[0];
+          stops = routeMeta.stops ?? [];
+        }
+      } catch {
+        return;
+      }
+    }
+
+    if (stops.length === 0) return;
+
+    const infoBar = document.getElementById('info-bar')!;
+    infoBar.classList.remove('hidden');
+    document.getElementById('info-stops')!.textContent = String(stops.length);
+
+    if (routeMeta) {
+      document.getElementById('info-km')!.textContent = String(routeMeta.total_distance_km);
+      document.getElementById('info-time')!.textContent = String(routeMeta.estimated_time_min);
+    }
+
+    // Add numbered markers
+    const latlngs: [number, number][] = [];
+    stops.forEach((s: any, i: number) => {
+      const color = markerColor(s.fill_level);
+      const pct = Math.round(s.fill_level * 100);
+      L.marker([s.latitude, s.longitude], { icon: numberedIcon(i + 1, color) })
+        .bindPopup(`<b>Parada ${i + 1}: ${s.container_id}</b><br/>Nivel: ${pct}%`)
+        .addTo(map);
+      latlngs.push([s.latitude, s.longitude]);
+    });
+
+    // Draw route line
+    if (latlngs.length > 1) {
+      L.polyline(latlngs, {
+        color: '#16a34a',
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '8, 8',
+      }).addTo(map);
+    }
+
+    // Fit bounds
+    if (latlngs.length > 0) {
+      map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
+    }
+  }
+
+  loadRoute();
+</script>

@@ -2,9 +2,156 @@
 import Layout from '../../layouts/Layout.astro';
 ---
 
-<Layout title="Reportes">
-  <main class="h-full overflow-y-auto p-6">
-    <h1 class="text-2xl font-bold text-eco-text-primary mb-6">Mis Reportes</h1>
-    <!-- TODO: Página de reportes del usuario -->
-  </main>
+<Layout title="Reportar">
+  <div class="h-app overflow-y-auto bg-eco-bg">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-10 bg-eco-bg-panel border-b border-eco-border px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-6 h-6 text-eco-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+        </svg>
+        <span class="font-medium text-eco-text-primary text-base">EcoRuta</span>
+        <span class="text-xs text-eco-text-secondary hidden sm:inline">— Ciudadano</span>
+      </div>
+      <a href="/usuario/info" class="text-xs px-3 py-1.5 rounded-lg border border-eco-border text-eco-text-secondary font-medium">
+        Info zona
+      </a>
+    </header>
+
+    <main class="max-w-lg mx-auto px-4 py-5 flex flex-col gap-5">
+
+      <!-- Report form -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-4">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Reportar anomalía</h2>
+
+        <div class="flex flex-col gap-1">
+          <label for="zone" class="text-xs text-eco-text-secondary">Zona</label>
+          <select id="zone" class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary">
+            <option value="centro">Centro</option>
+            <option value="norte">Norte</option>
+            <option value="sur">Sur</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label for="description" class="text-xs text-eco-text-secondary">Descripción</label>
+          <textarea id="description" rows="3" placeholder="Ej: Contenedor desbordado en la esquina..." class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary resize-none"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label for="lat" class="text-xs text-eco-text-secondary">Latitud</label>
+            <input id="lat" type="number" step="any" placeholder="19.4326" class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="lng" class="text-xs text-eco-text-secondary">Longitud</label>
+            <input id="lng" type="number" step="any" placeholder="-99.1332" class="w-full rounded-lg border border-eco-border bg-eco-bg px-3 py-2 text-sm text-eco-text-primary"/>
+          </div>
+        </div>
+
+        <button id="locate-btn" class="text-xs text-eco-info underline self-start">
+          Usar mi ubicación actual
+        </button>
+
+        <button id="submit-btn" class="w-full py-2.5 rounded-lg bg-eco-green text-white font-medium text-sm active:scale-[0.98] transition-transform">
+          Enviar reporte
+        </button>
+
+        <p id="form-msg" class="text-xs text-center hidden"></p>
+      </div>
+
+      <!-- Recent reports -->
+      <div class="bg-eco-bg-panel border border-eco-border rounded-xl p-4 flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-eco-text-secondary uppercase tracking-wide">Reportes recientes</h2>
+        <ul id="report-list" class="flex flex-col gap-2">
+          <li class="text-sm text-eco-text-secondary">Cargando...</li>
+        </ul>
+      </div>
+
+    </main>
+  </div>
 </Layout>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
+
+  // Geolocation
+  document.getElementById('locate-btn')!.addEventListener('click', () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        (document.getElementById('lat') as HTMLInputElement).value = pos.coords.latitude.toFixed(6);
+        (document.getElementById('lng') as HTMLInputElement).value = pos.coords.longitude.toFixed(6);
+      },
+      () => showMsg('No se pudo obtener la ubicación', true)
+    );
+  });
+
+  // Submit report
+  document.getElementById('submit-btn')!.addEventListener('click', async () => {
+    const btn = document.getElementById('submit-btn') as HTMLButtonElement;
+    const desc = (document.getElementById('description') as HTMLTextAreaElement).value.trim();
+    const zone = (document.getElementById('zone') as HTMLSelectElement).value;
+    const lat = parseFloat((document.getElementById('lat') as HTMLInputElement).value);
+    const lng = parseFloat((document.getElementById('lng') as HTMLInputElement).value);
+
+    if (!desc) { showMsg('Escribe una descripción', true); return; }
+    if (isNaN(lat) || isNaN(lng)) { showMsg('Ingresa coordenadas válidas o usa tu ubicación', true); return; }
+
+    btn.textContent = 'Enviando...';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API}/api/v1/reports/citizen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude: lat, longitude: lng, description: desc, zone }),
+      });
+
+      if (!res.ok) throw new Error();
+
+      showMsg('Reporte enviado correctamente', false);
+      (document.getElementById('description') as HTMLTextAreaElement).value = '';
+      loadReports();
+    } catch {
+      showMsg('Error al enviar reporte', true);
+    } finally {
+      btn.textContent = 'Enviar reporte';
+      btn.disabled = false;
+    }
+  });
+
+  function showMsg(text: string, isError: boolean) {
+    const el = document.getElementById('form-msg')!;
+    el.textContent = text;
+    el.className = `text-xs text-center ${isError ? 'text-eco-danger' : 'text-eco-green'}`;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 4000);
+  }
+
+  // Load recent reports
+  async function loadReports() {
+    const list = document.getElementById('report-list')!;
+    try {
+      const res = await fetch(`${API}/api/v1/reports/citizen`);
+      const data: any[] = await res.json();
+
+      if (data.length === 0) {
+        list.innerHTML = '<li class="text-sm text-eco-text-secondary">Sin reportes por el momento.</li>';
+        return;
+      }
+
+      const recent = [...data].reverse().slice(0, 8);
+      list.innerHTML = recent.map(r => `
+        <li class="bg-eco-bg-header rounded-lg px-3 py-2.5">
+          <p class="text-sm text-eco-text-primary">${r.description}</p>
+          <p class="text-xs text-eco-text-secondary mt-0.5">Zona ${r.zone} · ${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}</p>
+        </li>`).join('');
+    } catch {
+      list.innerHTML = '<li class="text-sm text-eco-danger">Error al cargar reportes</li>';
+    }
+  }
+
+  loadReports();
+</script>
