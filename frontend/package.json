@@ -11,6 +11,9 @@
     "preview": "astro preview",
     "astro": "astro"
   },
+  "overrides": {
+    "serialize-javascript": ">=7.0.5"
+  },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.1.4",
