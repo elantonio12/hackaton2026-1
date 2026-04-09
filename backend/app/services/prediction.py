@@ -1,4 +1,24 @@
-"""Prediction service: Granite TTM R2 zero-shot fill-level forecasting."""
+"""Prediction service: client-side state for fill-level forecasting.
+
+The actual TTM model lives in the ml-service container — we used to
+load it in-process here but every uvicorn worker would load its own
+copy of the ~300 MB model. Extracting it lets backend run with more
+workers and a much smaller image.
+
+What's still owned by backend:
+  - `container_history`: in-memory deques of recent readings, fed by
+    the sensor ingest hot path. Resampled to a 15-min grid before
+    being sent to ml-service.
+  - `append_reading`, `generate_seed_history`: history bookkeeping.
+  - `predict_all`, `predict_container`: thin orchestrators that
+    resample, POST to ml-service, and decorate the result.
+  - The `predictor` shim: a minimal singleton holding metadata so
+    the legacy /predictions/model-status endpoint still works.
+
+What moved to ml-service:
+  - torch, tsfm_public, the actual TTM model
+  - watsonx.ai fallback
+"""
 
 import logging
 import math
@@ -9,12 +29,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
-import torch
-from tsfm_public.toolkit.get_model import get_model
 
-from app.core.config import settings
 from app.models.schemas import ContainerReading
-from app.services import watsonx_forecast
+from app.services import ml_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +46,11 @@ ZONE_FILL_RATES = {"centro": 0.035, "norte": 0.025, "sur": 0.020}
 
 MIN_TRAINING_SAMPLES = 50
 
-# TTM R2 configuration
+# TTM R2 contract — must match ml-service/app/predictor.py
 RESAMPLE_INTERVAL = timedelta(minutes=15)
-CONTEXT_LENGTH = 512       # 512 * 15min = 5.3 days of history
-PREDICTION_LENGTH = 96     # 96 * 15min = 24 hours of forecast
-MIN_CONTEXT_POINTS = 96    # Minimum resampled points to attempt TTM prediction
+CONTEXT_LENGTH = ml_client.CONTEXT_LENGTH         # 512
+PREDICTION_LENGTH = ml_client.PREDICTION_LENGTH   # 96
+MIN_CONTEXT_POINTS = 96    # need at least 24h of resampled history to bother
 
 
 @dataclass
@@ -48,16 +65,17 @@ class HistoricalReading:
 container_history: dict[str, deque[HistoricalReading]] = {}
 
 # ---------------------------------------------------------------------------
-# Resampling utilities (replaces manual feature engineering)
+# Resampling utilities (run locally before posting to ml-service)
 # ---------------------------------------------------------------------------
 
 
 def _resample_to_15min(
     history: deque[HistoricalReading] | list[HistoricalReading],
 ) -> list[float]:
-    """Resample irregular fill_level readings to regular 15-minute intervals.
+    """Resample irregular fill_level readings to a regular 15-minute grid.
 
-    Uses last-observation-carried-forward (LOCF) interpolation.
+    Last-observation-carried-forward (LOCF) interpolation. Returns the
+    resampled fill_level series in chronological order.
     """
     if len(history) < 2:
         return []
@@ -67,11 +85,9 @@ def _resample_to_15min(
     first_ts = timestamps[0]
     last_ts = timestamps[-1]
 
-    # Build regular 15-minute grid
     grid: list[float] = []
     t = first_ts
     while t <= last_ts:
-        # Find the closest reading at-or-before t via binary search
         idx = bisect_left(timestamps, t)
         if idx >= len(timestamps):
             idx = len(timestamps) - 1
@@ -94,35 +110,6 @@ def _pad_or_truncate(series: list[float], target_length: int) -> list[float]:
 # ---------------------------------------------------------------------------
 # Legacy feature engineering (kept for backward compatibility)
 # ---------------------------------------------------------------------------
-
-
-def _extract_features(
-    reading: HistoricalReading,
-    history: deque[HistoricalReading] | list[HistoricalReading],
-) -> list[float]:
-    """Extract 7 features from a reading + its history context."""
-    ts = reading.timestamp
-
-    hour = ts.hour + ts.minute / 60.0
-    hour_sin = math.sin(2 * math.pi * hour / 24)
-    hour_cos = math.cos(2 * math.pi * hour / 24)
-
-    dow = ts.weekday()
-    dow_sin = math.sin(2 * math.pi * dow / 7)
-    dow_cos = math.cos(2 * math.pi * dow / 7)
-
-    zone_encoded = ZONE_MAP.get(reading.zone, 0)
-    fill_rate = _compute_fill_rate(reading, history)
-
-    return [
-        hour_sin,
-        hour_cos,
-        dow_sin,
-        dow_cos,
-        zone_encoded,
-        fill_rate,
-        reading.fill_level,
-    ]
 
 
 def _compute_fill_rate(
@@ -152,208 +139,72 @@ def _compute_fill_rate(
     return (current.fill_level - past.fill_level) / (dt_seconds / 3600)
 
 
-# ---------------------------------------------------------------------------
-# Training data construction (kept for backward compatibility)
-# ---------------------------------------------------------------------------
-
-DOWNSAMPLE_INTERVAL = timedelta(minutes=10)
-
-
 def _build_training_set(
     history: dict[str, deque[HistoricalReading]],
 ) -> tuple[list[list[float]], list[float]]:
-    """Build (X, y) pairs. Kept for /retrain endpoint compatibility."""
-    X: list[list[float]] = []
-    y: list[float] = []
+    """Counter for the legacy /predictions/retrain endpoint.
 
-    for container_id, readings in history.items():
-        readings_list = list(readings)
-        n = len(readings_list)
-        if n < 10:
-            continue
-
-        timestamps = [r.timestamp for r in readings_list]
-        last_sampled: datetime | None = None
-
-        for i in range(n):
-            r = readings_list[i]
-            if last_sampled is not None and (r.timestamp - last_sampled) < DOWNSAMPLE_INTERVAL:
-                continue
-            last_sampled = r.timestamp
-
-            target_time = r.timestamp + timedelta(hours=24)
-            j = bisect_left(timestamps, target_time)
-
-            best = None
-            best_diff = timedelta(hours=2)
-            for candidate in (j - 1, j):
-                if 0 <= candidate < n and candidate != i:
-                    diff = abs(timestamps[candidate] - target_time)
-                    if diff < best_diff:
-                        best_diff = diff
-                        best = candidate
-
-            if best is not None:
-                context_start = max(0, i - 200)
-                context = readings_list[context_start:i + 1]
-                features = _extract_features(r, context)
-                X.append(features)
-                y.append(readings_list[best].fill_level)
-
-    return X, y
+    TTM is zero-shot — there's nothing to actually train on the backend
+    side anymore. We keep this so the endpoint can still report a
+    sample count without crashing.
+    """
+    # Count how many history points we have, for the metadata response
+    total = sum(len(h) for h in history.values())
+    return [[]] * total, [0.0] * total
 
 
 # ---------------------------------------------------------------------------
-# Granite TTM R2 predictor
+# Predictor shim — metadata only
 # ---------------------------------------------------------------------------
 
 
-class FillLevelPredictor:
-    def __init__(self):
-        self.model = None
-        self.is_trained: bool = False
+class FillLevelPredictorShim:
+    """Compatibility shim for code that used to talk to the in-process
+    TTM model.
+
+    `is_trained` is now derived from ml-service health (cached). The
+    other fields are bookkeeping for the legacy /model-status endpoint.
+    """
+
+    def __init__(self) -> None:
         self.training_samples_count: int = 0
         self.last_trained_at: datetime | None = None
         self.loss: float | None = None
         self.retrain_threshold: int = 500
         self._readings_since_last_train: int = 0
+        self._last_known_ready: bool = False
 
-    def load_model(self) -> None:
-        """Load the pre-trained Granite TTM R2 model (zero-shot)."""
-        self.model = get_model(
-            model_path="ibm-granite/granite-timeseries-ttm-r2",
-            context_length=CONTEXT_LENGTH,
-            prediction_length=PREDICTION_LENGTH,
-        )
-        self.model.eval()
-        self.is_trained = True
-        logger.info("[Prediction] Granite TTM R2 loaded (zero-shot, ctx=%d, pred=%d)",
-                     CONTEXT_LENGTH, PREDICTION_LENGTH)
+    @property
+    def is_trained(self) -> bool:
+        """Best-effort flag based on the last cached ml-service health probe.
 
-    def train(self, X: list[list[float]], y: list[float]) -> dict:
-        """Backward-compatible train method. TTM is zero-shot, so this updates metadata only."""
-        if len(X) < MIN_TRAINING_SAMPLES:
-            return {"error": "Not enough data", "samples": len(X)}
-
-        self.is_trained = True
-        self.training_samples_count = len(X)
-        self.last_trained_at = datetime.now(timezone.utc)
-        self.loss = None
-        self._readings_since_last_train = 0
-
-        logger.info(
-            "[Prediction] TTM R2 ready (zero-shot), %d history samples available",
-            len(X),
-        )
-        return {"samples": len(X), "loss": None, "n_iter": 0}
-
-    def predict_fill_trajectory(
-        self, history: deque[HistoricalReading] | list[HistoricalReading],
-    ) -> np.ndarray | None:
-        """Predict fill levels for the next 24 hours.
-
-        Primary: local Granite TTM R2 (zero-shot, CPU).
-        Fallback: IBM watsonx.ai hosted Granite TTM API.
-
-        Returns array of 96 predicted values (15-min intervals) or None.
+        We can't make this property async, so we return the most recently
+        observed value. Code paths that need a guaranteed-fresh value
+        should `await ml_client.is_ready()` directly.
         """
-        series = _resample_to_15min(history)
-        if len(series) < MIN_CONTEXT_POINTS:
-            return None
+        return self._last_known_ready
 
-        # Path 1: local TTM R2 (skipped if forcing watsonx)
-        if not settings.force_watsonx_forecast and self.model is not None:
-            try:
-                series_padded = _pad_or_truncate(series, CONTEXT_LENGTH)
-                input_tensor = torch.tensor(
-                    series_padded, dtype=torch.float32,
-                ).unsqueeze(0).unsqueeze(-1)
-                with torch.no_grad():
-                    output = self.model(input_tensor)
-                predictions = output.prediction_outputs[0, :, 0].numpy()
-                return np.clip(predictions, 0.0, 1.0)
-            except Exception as e:
-                logger.warning("[Prediction] Local TTM inference failed: %s", e)
+    async def refresh_ready(self) -> bool:
+        self._last_known_ready = await ml_client.is_ready()
+        return self._last_known_ready
 
-        # Path 2: watsonx.ai fallback
-        if watsonx_forecast.is_available():
-            readings = list(history)
-            last_ts = readings[-1].timestamp
-            first_ts = last_ts - RESAMPLE_INTERVAL * (len(series) - 1)
-            timestamps = [
-                (first_ts + RESAMPLE_INTERVAL * i).isoformat()
-                for i in range(len(series))
-            ]
-            watsonx_preds = watsonx_forecast.forecast_fill_trajectory(
-                timestamps=timestamps,
-                fill_levels=series,
-                prediction_length=PREDICTION_LENGTH,
-            )
-            if watsonx_preds:
-                return np.array(watsonx_preds, dtype=np.float32)
-
-        return None
-
-    def predict_fill_trajectory_batch(
-        self,
-        histories: list[deque[HistoricalReading] | list[HistoricalReading]],
-    ) -> list[np.ndarray | None]:
-        """Batched version of predict_fill_trajectory.
-
-        Runs a single TTM forward pass over all eligible containers at once.
-        Returns a list of the same length as `histories`, with None for
-        entries that had insufficient data.
-        """
-        if self.model is None or settings.force_watsonx_forecast:
-            # Fallback: per-container path (watsonx or linear)
-            return [self.predict_fill_trajectory(h) for h in histories]
-
-        # Resample all histories; mark insufficient ones
-        series_list: list[list[float]] = []
-        valid_indices: list[int] = []
-        for i, hist in enumerate(histories):
-            series = _resample_to_15min(hist)
-            if len(series) >= MIN_CONTEXT_POINTS:
-                series_list.append(_pad_or_truncate(series, CONTEXT_LENGTH))
-                valid_indices.append(i)
-
-        results: list[np.ndarray | None] = [None] * len(histories)
-        if not series_list:
-            return results
-
-        # Build batch tensor: (batch, context, channels=1)
-        try:
-            batch_tensor = torch.tensor(
-                series_list, dtype=torch.float32,
-            ).unsqueeze(-1)  # shape (B, 512, 1)
-            with torch.no_grad():
-                output = self.model(batch_tensor)
-            # output.prediction_outputs shape: (B, 96, 1)
-            predictions = output.prediction_outputs[:, :, 0].numpy()
-            predictions = np.clip(predictions, 0.0, 1.0)
-            for batch_idx, orig_idx in enumerate(valid_indices):
-                results[orig_idx] = predictions[batch_idx]
-            return results
-        except Exception as e:
-            logger.warning("[Prediction] Batched TTM inference failed: %s", e)
-            # Fall back to per-container
-            return [self.predict_fill_trajectory(h) for h in histories]
-
-    def predict(self, features: list[list[float]]) -> list[float]:
-        """Legacy predict method. Kept for API compatibility."""
-        if not self.is_trained:
-            raise ValueError("Model not trained yet")
-        return [0.5] * len(features)
+    def record_new_reading(self) -> None:
+        self._readings_since_last_train += 1
 
     def should_retrain(self) -> bool:
         return self._readings_since_last_train >= self.retrain_threshold
 
-    def record_new_reading(self):
-        self._readings_since_last_train += 1
+    def train(self, X: list[list[float]], y: list[float]) -> dict:
+        """No-op compat shim — TTM is zero-shot, we just refresh metadata."""
+        self.training_samples_count = len(X)
+        self.last_trained_at = datetime.now(timezone.utc)
+        self._readings_since_last_train = 0
+        return {"samples": len(X), "loss": None, "n_iter": 0}
 
 
 # Module-level singleton
-predictor = FillLevelPredictor()
+predictor = FillLevelPredictorShim()
+
 
 # ---------------------------------------------------------------------------
 # History management
@@ -361,7 +212,7 @@ predictor = FillLevelPredictor()
 
 MAX_HISTORY_PER_CONTAINER = 1024  # 10.6 days at 15-min resample granularity
 
-# Threshold above which we switch to a lightweight seed (24h @ 30min instead of 144h @ 10min)
+# Threshold above which we switch to a lightweight seed
 LARGE_DEPLOYMENT_THRESHOLD = 500
 
 
@@ -373,7 +224,7 @@ def _ensure_utc(ts: datetime) -> datetime:
 
 
 def append_reading(reading: ContainerReading) -> None:
-    """Append a ContainerReading to the history buffer."""
+    """Append a ContainerReading to the in-memory history buffer."""
     cid = reading.container_id
     if cid not in container_history:
         container_history[cid] = deque(maxlen=MAX_HISTORY_PER_CONTAINER)
@@ -396,17 +247,12 @@ def append_reading(reading: ContainerReading) -> None:
 
 
 def maybe_retrain() -> dict | None:
-    """Retrain if enough new readings have accumulated."""
-    if not predictor.should_retrain():
-        return None
-    X, y = _build_training_set(container_history)
-    if len(X) < MIN_TRAINING_SAMPLES:
-        return None
-    return predictor.train(X, y)
+    """No-op (TTM is zero-shot). Kept so the ingest path doesn't break."""
+    return None
 
 
 # ---------------------------------------------------------------------------
-# Seed historical data (144h synthetic — 6 days for TTM context)
+# Seed historical data
 # ---------------------------------------------------------------------------
 
 
@@ -421,8 +267,6 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
 
     n = len(sensors_list)
     if n > LARGE_DEPLOYMENT_THRESHOLD:
-        # Lightweight seed: 24h @ 30-min intervals = 48 points per container
-        # With 10K sensors: 10K * 48 * ~100 bytes ≈ 48 MB
         start = now - timedelta(hours=24)
         interval = timedelta(minutes=30)
         logger.info(
@@ -430,7 +274,6 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
             n,
         )
     else:
-        # Rich seed for small deployments: 144h @ 10-min intervals
         start = now - timedelta(hours=144)
         interval = timedelta(minutes=10)
         logger.info(
@@ -451,11 +294,7 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
         t = start
         while t <= now:
             hour = t.hour
-            if 6 <= hour < 22:
-                rate_mult = 1.3
-            else:
-                rate_mult = 0.5
-
+            rate_mult = 1.3 if 6 <= hour < 22 else 0.5
             fill += base_rate * rate_mult * step_hours
             fill += random.gauss(0, 0.02)
             fill = max(0.0, min(1.0, fill))
@@ -475,11 +314,12 @@ def generate_seed_history(sensors_list: list[dict]) -> None:
 
 
 def train_initial_model() -> dict:
-    """Load TTM R2 model and validate history is sufficient."""
-    predictor.load_model()
-    X, y = _build_training_set(container_history)
-    metrics = predictor.train(X, y)
-    print(f"[Prediction] Granite TTM R2 loaded, {metrics.get('samples', 0)} history samples available")
+    """Compatibility shim. The model lives in ml-service now — there's
+    nothing to load locally. We just refresh the metadata so the legacy
+    /predictions/model-status endpoint reports something sensible."""
+    total_history = sum(len(h) for h in container_history.values())
+    metrics = predictor.train([[]] * total_history, [0.0] * total_history)
+    print(f"[Prediction] ml-service handles inference, {total_history} history samples seeded")
     return metrics
 
 
@@ -542,46 +382,80 @@ def _build_prediction_dict(
     }
 
 
-def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
-    """Generate prediction for a single container."""
+def _eligible_history(
+    history: deque[HistoricalReading] | list[HistoricalReading],
+) -> list[float] | None:
+    """Resample + pad a single history. Returns None if too short."""
+    series = _resample_to_15min(history)
+    if len(series) < MIN_CONTEXT_POINTS:
+        return None
+    return _pad_or_truncate(series, CONTEXT_LENGTH)
+
+
+async def predict_container(container_id: str, threshold: float = 0.8) -> dict | None:
+    """Generate a prediction for a single container by container_id.
+
+    Resamples that container's history locally, sends a 1-element batch
+    to ml-service, decorates the result. Returns None if we don't have
+    enough history or ml-service is down.
+    """
     history = container_history.get(container_id)
     if not history or len(history) < 2:
         return None
-    if not predictor.is_trained:
-        return None
 
-    trajectory = predictor.predict_fill_trajectory(history)
+    series = _eligible_history(history)
+    trajectory: np.ndarray | None = None
+    if series is not None:
+        results = await ml_client.predict_batch([series])
+        if results and results[0] is not None:
+            trajectory = np.clip(np.array(results[0], dtype=np.float32), 0.0, 1.0)
+
     return _build_prediction_dict(container_id, history, trajectory, threshold)
 
 
-def predict_all(zone: str | None = None, threshold: float = 0.8) -> list[dict]:
-    """Get predictions for all containers, optionally filtered by zone.
+async def predict_all(zone: str | None = None, threshold: float = 0.8) -> list[dict]:
+    """Run predictions for every container with enough history.
 
-    Uses batched TTM inference: a single forward pass over all eligible
-    containers instead of N independent calls.
+    Optionally filtered by zone. Builds a single batch request to
+    ml-service so the network round-trip cost is amortized.
     """
-    if not predictor.is_trained:
-        return []
-
     # Collect eligible containers (optionally zone-filtered)
-    eligible: list[tuple[str, deque[HistoricalReading]]] = []
+    eligible: list[tuple[str, deque[HistoricalReading], list[float]]] = []
+    short: list[tuple[str, deque[HistoricalReading]]] = []
+
     for cid, history in container_history.items():
         if not history or len(history) < 2:
             continue
         if zone and history[-1].zone != zone:
             continue
-        eligible.append((cid, history))
+        series = _eligible_history(history)
+        if series is None:
+            short.append((cid, history))
+        else:
+            eligible.append((cid, history, series))
 
-    if not eligible:
+    if not eligible and not short:
         return []
 
-    histories = [h for _, h in eligible]
-    trajectories = predictor.predict_fill_trajectory_batch(histories)
+    # Single batch round-trip for everyone with sufficient history
+    trajectories: list[np.ndarray | None] = []
+    if eligible:
+        series_payload = [s for _, _, s in eligible]
+        responses = await ml_client.predict_batch(series_payload)
+        for resp in responses:
+            if resp is None:
+                trajectories.append(None)
+            else:
+                trajectories.append(np.clip(np.array(resp, dtype=np.float32), 0.0, 1.0))
 
-    results = [
-        _build_prediction_dict(cid, hist, traj, threshold)
-        for (cid, hist), traj in zip(eligible, trajectories)
-    ]
+    results: list[dict] = []
+    for (cid, hist, _), traj in zip(eligible, trajectories):
+        results.append(_build_prediction_dict(cid, hist, traj, threshold))
+
+    # Containers with insufficient history still get a linear-extrapolation
+    # prediction so the dashboard isn't blank for fresh sensors.
+    for cid, hist in short:
+        results.append(_build_prediction_dict(cid, hist, None, threshold))
 
     results.sort(key=lambda p: p["estimated_hours_to_full"] or float("inf"))
     return results

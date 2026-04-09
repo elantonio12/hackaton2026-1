@@ -6,13 +6,37 @@ services:
     env_file:
       - .env
     environment:
-      - HF_HOME=/app/.cache/huggingface
       - OSRM_URL=http://osrm:5000
-    volumes:
-      - hf_cache:/app/.cache/huggingface
+      - ML_SERVICE_URL=http://ml-service:8001
     depends_on:
       db:
         condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Granite TTM R2 inference service. Used to live in the backend image
+  # (~1.5 GB just for torch + tsfm_public + the model weights). Extracting
+  # it here means:
+  #   - the backend image stays lean and can run more uvicorn workers
+  #     without multiplying the model footprint in RAM
+  #   - the model loads ONCE here, not once per backend worker
+  #   - if TTM crashes/OOMs, it doesn't take down the API
+  # Backend talks to it at http://ml-service:8001/predict_batch.
+  ml-service:
+    build: ./ml-service
+    env_file:
+      - .env
+    environment:
+      - HF_HOME=/app/.cache/huggingface
+    volumes:
+      - hf_cache:/app/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 180s   # first boot loads ~300 MB of model weights
     restart: unless-stopped
 
   # Sensor simulator has been moved to vps2 — see simulator/docker-compose.vps2.yml

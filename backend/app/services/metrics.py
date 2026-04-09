@@ -10,9 +10,9 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.executors import run_in_thread
 from app.db.models import Collector, ContainerReading, Route, Sensor, Truck
 from app.models.schemas import ContainerReading as ContainerReadingSchema
+from app.services import ml_client
 from app.services.prediction import (
     container_history,
     predict_all,
@@ -117,10 +117,11 @@ async def compute_metrics(
     critical = [r for r in readings if r.fill_level >= fill_threshold]
 
     predicted_full_24h = 0
-    if predictor.is_trained:
-        # Offload to thread pool: TTM inference is CPU-bound but
-        # GIL-releasing, so the asyncio loop stays responsive.
-        preds = await run_in_thread(predict_all, threshold=fill_threshold)
+    # Probe ml-service liveness; cached internally so the cost is ~free
+    if await ml_client.is_ready():
+        # predict_all is now async and POSTs to ml-service over HTTP —
+        # the asyncio loop stays free during the round-trip.
+        preds = await predict_all(threshold=fill_threshold)
         predicted_full_24h = sum(
             1 for p in preds
             if p.get("estimated_hours_to_full") is not None

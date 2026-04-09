@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.routes.auth import require_admin
-from app.core.executors import run_in_thread
 from app.db.models import User
 from app.models.schemas import ContainerPrediction, ModelStatus, PredictionResponse
+from app.services import ml_client
 from app.services.prediction import (
     MIN_TRAINING_SAMPLES,
     _build_training_set,
@@ -21,13 +21,13 @@ router = APIRouter()
 @router.get("/", response_model=PredictionResponse)
 async def get_all_predictions(zone: str | None = None, threshold: float = 0.8):
     """Get fill-level predictions for all containers."""
-    if not predictor.is_trained:
-        raise HTTPException(status_code=503, detail="Modelo no entrenado aún")
+    # Liveness probe against ml-service. Cached in ml_client so this
+    # is essentially free on the hot path.
+    ready = await ml_client.is_ready()
+    if not ready:
+        raise HTTPException(status_code=503, detail="ml-service no está listo aún")
 
-    # Run in the thread pool — TTM batched inference is CPU-bound but
-    # numpy/torch release the GIL during the heavy work, so this still
-    # frees the asyncio loop while ~10K predictions cook.
-    predictions = await run_in_thread(predict_all, zone=zone, threshold=threshold)
+    predictions = await predict_all(zone=zone, threshold=threshold)
     return PredictionResponse(
         predictions=[ContainerPrediction(**p) for p in predictions],
         model_trained=predictor.is_trained,
@@ -38,7 +38,13 @@ async def get_all_predictions(zone: str | None = None, threshold: float = 0.8):
 
 @router.get("/model-status", response_model=ModelStatus)
 async def get_model_status():
-    """Return model training metadata."""
+    """Return model training metadata.
+
+    Refreshes the ml-service ready flag from the live health probe so
+    the dashboard accurately reflects whether predictions are available
+    right now.
+    """
+    await predictor.refresh_ready()
     return ModelStatus(
         is_trained=predictor.is_trained,
         training_samples=predictor.training_samples_count,
@@ -62,10 +68,11 @@ async def force_retrain(_admin: User = Depends(require_admin)):
 @router.get("/{container_id}", response_model=ContainerPrediction)
 async def get_container_prediction(container_id: str, threshold: float = 0.8):
     """Get detailed prediction for a single container."""
-    if not predictor.is_trained:
-        raise HTTPException(status_code=503, detail="Modelo no entrenado aún")
+    ready = await ml_client.is_ready()
+    if not ready:
+        raise HTTPException(status_code=503, detail="ml-service no está listo aún")
 
-    pred = predict_container(container_id, threshold)
+    pred = await predict_container(container_id, threshold)
     if pred is None:
         raise HTTPException(status_code=404, detail="Contenedor no encontrado en historial")
     return ContainerPrediction(**pred)
