@@ -1,12 +1,114 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import '../../styles/auth.css';
 ---
 
 <Layout title="Registro">
-  <main class="h-full flex items-center justify-center">
-    <div class="w-full max-w-md p-6">
-      <h1 class="text-2xl font-bold text-eco-text-primary mb-6 text-center">Crear Cuenta</h1>
-      <!-- TODO: Formulario de registro -->
+  <main class="auth-main">
+    <div class="auth-card mt-8 mb-8">
+      <div class="auth-header">
+        <h1 class="auth-title">Crear Cuenta</h1>
+        <p class="auth-subtitle">Únete a EcoRuta hoy mismo</p>
+      </div>
+
+      <form id="register-form" class="auth-form">
+        <div class="auth-form-group">
+          <label for="name" class="auth-label">Nombre Completo</label>
+          <input type="text" id="name" class="auth-input" placeholder="Juan Pérez" required />
+        </div>
+
+        <div class="auth-form-group">
+          <label for="email" class="auth-label">Correo Electrónico</label>
+          <input type="email" id="email" class="auth-input" placeholder="tu@correo.com" required />
+        </div>
+        
+        <div class="auth-form-group">
+          <label for="password" class="auth-label">Contraseña</label>
+          <div class="auth-input-wrapper">
+            <input type="password" id="password" class="auth-input has-icon" placeholder="••••••••" required />
+            <button type="button" class="password-toggle" id="toggle-password" aria-label="Mostrar contraseña">
+              <svg class="eye-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-form-group">
+          <label for="confirm_password" class="auth-label">Confirmar Contraseña</label>
+          <div class="auth-input-wrapper">
+            <input type="password" id="confirm_password" class="auth-input has-icon" placeholder="••••••••" required />
+            <button type="button" class="password-toggle" id="toggle-confirm-password" aria-label="Mostrar contraseña">
+              <svg class="eye-icon-confirm" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+              </svg>
+            </button>
+          </div>
+          <p id="password-error" class="text-sm font-medium mt-1 hidden" style="color: #ef4444;">Las contraseñas no coinciden</p>
+        </div>
+
+        <button type="submit" class="auth-button" style="margin-top: 0.5rem;" id="submit-btn">
+          Registrarse
+        </button>
+      </form>
+
+      <p class="auth-footer">
+        ¿Ya tienes una cuenta? 
+        <a href="/auth/login" class="auth-link">Inicia sesión</a>
+      </p>
     </div>
   </main>
 </Layout>
+
+<script>
+  // Setup toggle visibility
+  function setupToggle(btnId: string, inputId: string, iconClass: string) {
+    const toggleBtn = document.getElementById(btnId);
+    const passwordInput = document.getElementById(inputId) as HTMLInputElement;
+    const eyeIcon = document.querySelector(`.${iconClass}`);
+
+    if (toggleBtn && passwordInput && eyeIcon) {
+      toggleBtn.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        if (type === 'text') {
+          eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>`;
+        } else {
+          eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>`;
+        }
+      });
+    }
+  }
+
+  setupToggle('toggle-password', 'password', 'eye-icon');
+  setupToggle('toggle-confirm-password', 'confirm_password', 'eye-icon-confirm');
+
+  // Form Validation & Submission
+  const registerForm = document.getElementById('register-form');
+  const passwordEl = document.getElementById('password') as HTMLInputElement;
+  const confirmPasswordEl = document.getElementById('confirm_password') as HTMLInputElement;
+  const errorText = document.getElementById('password-error');
+
+  if (registerForm && passwordEl && confirmPasswordEl && errorText) {
+    registerForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      if (passwordEl.value !== confirmPasswordEl.value) {
+        errorText.style.display = 'block';
+        return;
+      }
+      
+      errorText.style.display = 'none';
+      
+      const btn = document.getElementById('submit-btn') as HTMLButtonElement;
+      const originalText = btn.innerText;
+      btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Creando cuenta...`;
+      btn.disabled = true;
+
+      setTimeout(() => {
+        window.location.href = '/auth/verified';
+      }, 1000);
+    });
+  }
+</script>

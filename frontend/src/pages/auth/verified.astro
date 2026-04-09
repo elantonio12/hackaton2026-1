@@ -1,12 +1,28 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import '../../styles/auth.css';
 ---
 
 <Layout title="Cuenta Verificada">
-  <main class="h-full flex items-center justify-center">
-    <div class="w-full max-w-md p-6 text-center">
-      <h1 class="text-2xl font-bold text-eco-green mb-4">Cuenta Verificada</h1>
-      <!-- TODO: Mensaje de verificación exitosa -->
+  <main class="auth-main">
+    <div class="auth-card" style="text-align: center;">
+      <div class="verified-content">
+        <!-- Bouncing Checkmark Icon -->
+        <div class="verified-icon-wrapper animate-bounce-custom">
+          <svg class="verified-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+        
+        <h1 class="verified-title">¡Cuenta Verificada!</h1>
+        <p class="verified-text">
+          Tu correo electrónico ha sido verificado exitosamente. Ahora puedes disfrutar de todos los beneficios de EcoRuta.
+        </p>
+        
+        <a href="/auth/login" class="auth-button" style="width: 100%;">
+          Ir a Iniciar Sesión
+        </a>
+      </div>
     </div>
   </main>
 </Layout>
