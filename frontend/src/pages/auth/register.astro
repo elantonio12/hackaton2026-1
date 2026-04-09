@@ -11,6 +11,8 @@ import '../../styles/auth.css';
         <p class="auth-subtitle">Únete a EcoRuta hoy mismo</p>
       </div>
 
+      <div id="error-banner" class="auth-error" style="display: none;"></div>
+
       <form id="register-form" class="auth-form">
         <div class="auth-form-group">
           <label for="name" class="auth-label">Nombre Completo</label>
@@ -21,7 +23,7 @@ import '../../styles/auth.css';
           <label for="email" class="auth-label">Correo Electrónico</label>
           <input type="email" id="email" class="auth-input" placeholder="tu@correo.com" required />
         </div>
-        
+
         <div class="auth-form-group">
           <label for="password" class="auth-label">Contraseña</label>
           <div class="auth-input-wrapper">
@@ -44,7 +46,7 @@ import '../../styles/auth.css';
               </svg>
             </button>
           </div>
-          <p id="password-error" class="text-sm font-medium mt-1 hidden" style="color: #ef4444;">Las contraseñas no coinciden</p>
+          <p id="password-error" class="auth-field-error" style="display: none;">Las contraseñas no coinciden</p>
         </div>
 
         <button type="submit" class="auth-button" style="margin-top: 0.5rem;" id="submit-btn">
@@ -53,7 +55,7 @@ import '../../styles/auth.css';
       </form>
 
       <p class="auth-footer">
-        ¿Ya tienes una cuenta? 
+        ¿Ya tienes una cuenta?
         <a href="/auth/login" class="auth-link">Inicia sesión</a>
       </p>
     </div>
@@ -61,54 +63,76 @@ import '../../styles/auth.css';
 </Layout>
 
 <script>
-  // Setup toggle visibility
+  import { apiRegister, redirectByRole, isAuthenticated, getUser } from '../../lib/api';
+
+  if (isAuthenticated()) {
+    const user = getUser();
+    if (user) redirectByRole(user);
+  }
+
+  // Password toggles
   function setupToggle(btnId: string, inputId: string, iconClass: string) {
     const toggleBtn = document.getElementById(btnId);
-    const passwordInput = document.getElementById(inputId) as HTMLInputElement;
-    const eyeIcon = document.querySelector(`.${iconClass}`);
-
-    if (toggleBtn && passwordInput && eyeIcon) {
+    const input = document.getElementById(inputId) as HTMLInputElement;
+    const icon = document.querySelector(`.${iconClass}`);
+    if (toggleBtn && input && icon) {
       toggleBtn.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        
+        const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+        input.setAttribute('type', type);
         if (type === 'text') {
-          eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>`;
+          icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>`;
         } else {
-          eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>`;
+          icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>`;
         }
       });
     }
   }
-
   setupToggle('toggle-password', 'password', 'eye-icon');
   setupToggle('toggle-confirm-password', 'confirm_password', 'eye-icon-confirm');
 
-  // Form Validation & Submission
+  // Form submission
   const registerForm = document.getElementById('register-form');
-  const passwordEl = document.getElementById('password') as HTMLInputElement;
-  const confirmPasswordEl = document.getElementById('confirm_password') as HTMLInputElement;
-  const errorText = document.getElementById('password-error');
+  const errorBanner = document.getElementById('error-banner');
+  const passwordError = document.getElementById('password-error');
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
 
-  if (registerForm && passwordEl && confirmPasswordEl && errorText) {
-    registerForm.addEventListener('submit', (e) => {
+  if (registerForm) {
+    registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      if (passwordEl.value !== confirmPasswordEl.value) {
-        errorText.style.display = 'block';
+      if (errorBanner) errorBanner.style.display = 'none';
+      if (passwordError) passwordError.style.display = 'none';
+
+      const name = (document.getElementById('name') as HTMLInputElement).value;
+      const email = (document.getElementById('email') as HTMLInputElement).value;
+      const password = (document.getElementById('password') as HTMLInputElement).value;
+      const confirmPassword = (document.getElementById('confirm_password') as HTMLInputElement).value;
+
+      if (password !== confirmPassword) {
+        if (passwordError) passwordError.style.display = 'block';
         return;
       }
-      
-      errorText.style.display = 'none';
-      
-      const btn = document.getElementById('submit-btn') as HTMLButtonElement;
-      const originalText = btn.innerText;
-      btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Creando cuenta...`;
-      btn.disabled = true;
 
-      setTimeout(() => {
-        window.location.href = '/auth/verified';
-      }, 1000);
+      const originalText = submitBtn.innerText;
+      submitBtn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Creando cuenta...`;
+      submitBtn.disabled = true;
+
+      try {
+        const data = await apiRegister(name, email, password);
+        if (data.access_token) {
+          // Auto-verified (dev mode), redirect by role
+          redirectByRole(data.user);
+        } else {
+          // Verification email sent
+          window.location.href = '/auth/verified?pending=true';
+        }
+      } catch (err: any) {
+        if (errorBanner) {
+          errorBanner.textContent = err.message;
+          errorBanner.style.display = 'block';
+        }
+        submitBtn.innerText = originalText;
+        submitBtn.disabled = false;
+      }
     });
   }
 </script>

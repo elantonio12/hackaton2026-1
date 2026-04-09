@@ -3,26 +3,107 @@ import Layout from '../../layouts/Layout.astro';
 import '../../styles/auth.css';
 ---
 
-<Layout title="Cuenta Verificada">
+<Layout title="Verificación de Cuenta">
   <main class="auth-main">
     <div class="auth-card" style="text-align: center;">
-      <div class="verified-content">
-        <!-- Bouncing Checkmark Icon -->
+      <!-- Pending state: waiting for email verification -->
+      <div id="pending-state" class="verified-content" style="display: none;">
+        <div class="auth-icon-wrapper" style="width: 5rem; height: 5rem; margin-bottom: 1.5rem;">
+          <svg style="width: 2.5rem; height: 2.5rem;" class="auth-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+        <h1 class="verified-title">Revisa tu correo</h1>
+        <p class="verified-text">
+          Te enviamos un enlace de verificación. Haz clic en el enlace del correo para activar tu cuenta.
+        </p>
+        <a href="/auth/login" class="auth-button" style="width: 100%;">
+          Ir a Iniciar Sesión
+        </a>
+      </div>
+
+      <!-- Verifying state: processing token -->
+      <div id="verifying-state" class="verified-content" style="display: none;">
+        <div class="auth-icon-wrapper" style="width: 5rem; height: 5rem; margin-bottom: 1.5rem;">
+          <svg class="animate-spin" style="width: 2.5rem; height: 2.5rem; color: var(--color-eco-green);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <h1 class="verified-title">Verificando...</h1>
+        <p class="verified-text">Estamos verificando tu cuenta.</p>
+      </div>
+
+      <!-- Success state -->
+      <div id="success-state" class="verified-content" style="display: none;">
         <div class="verified-icon-wrapper animate-bounce-custom">
           <svg class="verified-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
           </svg>
         </div>
-        
         <h1 class="verified-title">¡Cuenta Verificada!</h1>
         <p class="verified-text">
           Tu correo electrónico ha sido verificado exitosamente. Ahora puedes disfrutar de todos los beneficios de EcoRuta.
         </p>
-        
-        <a href="/auth/login" class="auth-button" style="width: 100%;">
+        <a href="/auth/login" class="auth-button" id="go-login-btn" style="width: 100%;">
           Ir a Iniciar Sesión
+        </a>
+      </div>
+
+      <!-- Error state -->
+      <div id="error-state" class="verified-content" style="display: none;">
+        <div class="auth-icon-wrapper" style="width: 5rem; height: 5rem; margin-bottom: 1.5rem; background-color: rgba(239, 68, 68, 0.1);">
+          <svg style="width: 2.5rem; height: 2.5rem; color: var(--color-eco-danger, #ef4444);" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </div>
+        <h1 class="verified-title">Error de Verificación</h1>
+        <p id="error-message" class="verified-text"></p>
+        <a href="/auth/register" class="auth-button" style="width: 100%;">
+          Volver a Registrarse
         </a>
       </div>
     </div>
   </main>
 </Layout>
+
+<script>
+  import { apiVerifyEmail, redirectByRole } from '../../lib/api';
+
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const pending = params.get('pending');
+
+  const pendingState = document.getElementById('pending-state');
+  const verifyingState = document.getElementById('verifying-state');
+  const successState = document.getElementById('success-state');
+  const errorState = document.getElementById('error-state');
+  const errorMessage = document.getElementById('error-message');
+
+  if (pending) {
+    // Came from register — show "check your email" message
+    if (pendingState) pendingState.style.display = 'flex';
+  } else if (token) {
+    // Came from email link — verify the token
+    if (verifyingState) verifyingState.style.display = 'flex';
+
+    apiVerifyEmail(token)
+      .then((data) => {
+        if (verifyingState) verifyingState.style.display = 'none';
+        if (successState) successState.style.display = 'flex';
+
+        // Auto-redirect after 3 seconds if we have auth
+        if (data.access_token && data.user) {
+          setTimeout(() => redirectByRole(data.user), 3000);
+        }
+      })
+      .catch((err: any) => {
+        if (verifyingState) verifyingState.style.display = 'none';
+        if (errorState) errorState.style.display = 'flex';
+        if (errorMessage) errorMessage.textContent = err.message;
+      });
+  } else {
+    // No token, no pending — show pending as default
+    if (pendingState) pendingState.style.display = 'flex';
+  }
+</script>
