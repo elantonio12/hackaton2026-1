@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     watsonx_api_key: str = ""
     watsonx_project_id: str = ""
     watsonx_url: str = "https://us-south.ml.cloud.ibm.com"
+    watsonx_ts_model_id: str = "ibm/granite-ttm-512-96-r2"
+    force_watsonx_forecast: bool = False
     allowed_origins: list[str] = ["*"]
 
     # JWT

@@ -12,7 +12,9 @@ import numpy as np
 import torch
 from tsfm_public.toolkit.get_model import get_model
 
+from app.core.config import settings
 from app.models.schemas import ContainerReading
+from app.services import watsonx_forecast
 
 logger = logging.getLogger(__name__)
 
@@ -248,30 +250,49 @@ class FillLevelPredictor:
     def predict_fill_trajectory(
         self, history: deque[HistoricalReading] | list[HistoricalReading],
     ) -> np.ndarray | None:
-        """Predict fill levels for the next 24 hours using TTM R2.
+        """Predict fill levels for the next 24 hours.
+
+        Primary: local Granite TTM R2 (zero-shot, CPU).
+        Fallback: IBM watsonx.ai hosted Granite TTM API.
 
         Returns array of 96 predicted values (15-min intervals) or None.
         """
-        if self.model is None:
-            return None
-
         series = _resample_to_15min(history)
         if len(series) < MIN_CONTEXT_POINTS:
             return None
 
-        series = _pad_or_truncate(series, CONTEXT_LENGTH)
+        # Path 1: local TTM R2 (skipped if forcing watsonx)
+        if not settings.force_watsonx_forecast and self.model is not None:
+            try:
+                series_padded = _pad_or_truncate(series, CONTEXT_LENGTH)
+                input_tensor = torch.tensor(
+                    series_padded, dtype=torch.float32,
+                ).unsqueeze(0).unsqueeze(-1)
+                with torch.no_grad():
+                    output = self.model(input_tensor)
+                predictions = output.prediction_outputs[0, :, 0].numpy()
+                return np.clip(predictions, 0.0, 1.0)
+            except Exception as e:
+                logger.warning("[Prediction] Local TTM inference failed: %s", e)
 
-        # Build tensor: (batch=1, context_length, channels=1)
-        input_tensor = torch.tensor(
-            series, dtype=torch.float32,
-        ).unsqueeze(0).unsqueeze(-1)
+        # Path 2: watsonx.ai fallback
+        if watsonx_forecast.is_available():
+            readings = list(history)
+            last_ts = readings[-1].timestamp
+            first_ts = last_ts - RESAMPLE_INTERVAL * (len(series) - 1)
+            timestamps = [
+                (first_ts + RESAMPLE_INTERVAL * i).isoformat()
+                for i in range(len(series))
+            ]
+            watsonx_preds = watsonx_forecast.forecast_fill_trajectory(
+                timestamps=timestamps,
+                fill_levels=series,
+                prediction_length=PREDICTION_LENGTH,
+            )
+            if watsonx_preds:
+                return np.array(watsonx_preds, dtype=np.float32)
 
-        with torch.no_grad():
-            output = self.model(input_tensor)
-
-        # output.prediction_outputs shape: (1, 96, 1)
-        predictions = output.prediction_outputs[0, :, 0].numpy()
-        return np.clip(predictions, 0.0, 1.0)
+        return None
 
     def predict(self, features: list[list[float]]) -> list[float]:
         """Legacy predict method. Kept for API compatibility."""
