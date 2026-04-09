@@ -374,3 +374,20 @@ export async function apiDeleteSensor(sensorId: string): Promise<void> {
     throw new Error(data.detail || 'Error al desactivar sensor');
   }
 }
+
+// ---------------------------------------------------------------------------
+// CDMX geo helpers (point-in-polygon over the 16 alcaldias)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the alcaldia containing the given coordinates. Returns null
+ * if the point is outside CDMX. Used by the admin sensor/truck CRUD
+ * to auto-fill the zone dropdown as soon as the user enters lat/lon.
+ */
+export async function apiLookupAlcaldia(lat: number, lon: number): Promise<string | null> {
+  const res = await apiFetch(`/cdmx/alcaldia?lat=${lat}&lon=${lon}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Error al consultar alcaldia');
+  const data = await res.json();
+  return data.alcaldia ?? null;
+}

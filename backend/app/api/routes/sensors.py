@@ -133,7 +133,31 @@ async def register_sensor(
     db: AsyncSession = Depends(get_db),
 ):
     """Register or upsert a sensor. Admin (via JWT) and the simulator
-    (via sensor api key) both share this endpoint."""
+    (via sensor api key) both share this endpoint.
+
+    Validates that (latitude, longitude) actually falls inside the
+    declared zone using the bundled CDMX alcaldia polygons. If the
+    point is outside CDMX, 422. If it's inside but in a different
+    alcaldia, 422 with the suggested zone in the detail (so the
+    frontend can offer to switch).
+    """
+    from app.services.geo import find_alcaldia
+
+    actual_zone = find_alcaldia(reg.latitude, reg.longitude)
+    if actual_zone is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Las coordenadas estan fuera de la Ciudad de Mexico",
+        )
+    if actual_zone != reg.zone:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Las coordenadas pertenecen a '{actual_zone}', "
+                f"no a '{reg.zone}'. Corrige el campo zone o las coordenadas."
+            ),
+        )
+
     data = reg.model_dump()
     stmt = pg_insert(Sensor).values(**data)
     stmt = stmt.on_conflict_do_update(
@@ -149,6 +173,29 @@ async def register_sensor(
 async def list_sensors(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Sensor))
     return [s.to_dict() for s in result.scalars().all()]
+
+
+@router.get("/recent-collections")
+async def list_recent_collections(since_ts: float = 0.0):
+    """Return container_ids the trucks have collected since `since_ts`.
+
+    The IoT sensor simulator polls this endpoint each cycle so it can
+    reset the local fill_level for any container that was just emptied
+    by a truck. Without this sync, the simulator's in-memory state
+    keeps posting the pre-collection fill level (e.g. 0.85) and
+    immediately overwrites the 0.05 reset that /trucks/{id}/collect
+    wrote to the DB.
+
+    Public (no auth): the response is just container ids and
+    timestamps, no PII or sensitive data. The buffer auto-evicts
+    after 10 minutes so it stays bounded.
+    """
+    from app.services.collections_buffer import recent_collections
+    return {
+        "since_ts": since_ts,
+        "now_ts": __import__("time").time(),
+        "collections": recent_collections.since(since_ts),
+    }
 
 
 @router.post("/readings")

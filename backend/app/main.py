@@ -3,7 +3,7 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, containers, routes, reports, collectors, sensors, predictions, metrics, user, trucks
+from app.api.routes import auth, cdmx, containers, routes, reports, collectors, sensors, predictions, metrics, user, trucks
 from app.core.config import settings
 
 app = FastAPI(
@@ -30,6 +30,7 @@ app.include_router(predictions.router, prefix="/api/v1/predictions", tags=["pred
 app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["metrics"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 app.include_router(trucks.router, prefix="/api/v1/trucks", tags=["trucks"])
+app.include_router(cdmx.router, prefix="/api/v1/cdmx", tags=["cdmx"])
 
 
 @app.on_event("startup")

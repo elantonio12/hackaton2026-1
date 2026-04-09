@@ -118,9 +118,46 @@ async def post_route_complete(client: httpx.AsyncClient, truck_id: str) -> None:
         log.warning("[post_route_complete] %s for %s", exc, truck_id)
 
 
-async def trigger_optimize(client: httpx.AsyncClient) -> None:
-    """Login as admin once and POST /routes/optimize. Used at startup
-    so the demo has routes to show before the first dashboard refresh."""
+async def _wait_for_fleet_seeded(
+    client: httpx.AsyncClient, expected_min: int = 30, timeout_s: float = 60.0
+) -> int:
+    """Poll /trucks/ until at least `expected_min` trucks exist.
+
+    Backend startup runs the truck seed asynchronously; on first deploy
+    (with 10K sensors + TTM model load + OSRM warmup), the seed can take
+    20-40 seconds. If we call /optimize before all 30 trucks are in the
+    DB, the optimizer only sees the partial fleet and most trucks stay
+    idle until someone manually re-runs optimize.
+
+    Returns the truck count we observed, which the caller logs.
+    """
+    deadline = asyncio.get_event_loop().time() + timeout_s
+    last_count = 0
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            r = await client.get(f"{BACKEND_URL}/api/v1/trucks/")
+            r.raise_for_status()
+            trucks = r.json()
+            last_count = len(trucks)
+            if last_count >= expected_min:
+                return last_count
+        except httpx.HTTPError as exc:
+            log.debug("[bootstrap] fleet check failed: %s", exc)
+        await asyncio.sleep(2.0)
+    log.warning(
+        "[bootstrap] fleet seed timeout after %.0fs (saw %d/%d trucks)",
+        timeout_s, last_count, expected_min,
+    )
+    return last_count
+
+
+async def trigger_optimize(client: httpx.AsyncClient) -> bool:
+    """Login as admin and POST /routes/optimize.
+
+    Returns True if at least one route was generated. The caller can
+    use that signal to retry once more if the optimizer raced against
+    a partial seed (e.g. only 1 truck in the DB at the time).
+    """
     try:
         login = await client.post(
             f"{BACKEND_URL}/api/v1/auth/login",
@@ -133,11 +170,14 @@ async def trigger_optimize(client: httpx.AsyncClient) -> None:
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
         if r.status_code == 200:
-            log.info("[bootstrap] /routes/optimize -> %s", r.json())
-        else:
-            log.warning("[bootstrap] /routes/optimize HTTP %s: %s", r.status_code, r.text[:200])
+            data = r.json()
+            log.info("[bootstrap] /routes/optimize -> %s", data)
+            return data.get("generated", 0) > 0
+        log.warning("[bootstrap] /routes/optimize HTTP %s: %s", r.status_code, r.text[:200])
+        return False
     except httpx.HTTPError as exc:
         log.warning("[bootstrap] could not optimize on startup: %s", exc)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -264,9 +304,23 @@ async def main() -> None:
             log.info("[boot] waiting for backend... (attempt %d)", attempt + 1)
             await asyncio.sleep(5)
 
-        # Trigger an initial optimize so the dashboard isn't blank
-        await asyncio.sleep(2)  # let backend finish bootstrapping (model training, seeds)
-        await trigger_optimize(client)
+        # Wait until the truck fleet is fully seeded before optimizing.
+        # On first deploy, the seed runs after backend startup hooks
+        # (admin, sensors, fleet, TTM model load) and can take 30s+.
+        # Triggering optimize too early generates only 1 route and the
+        # other 29 trucks stay idle until someone manually re-runs.
+        seen = await _wait_for_fleet_seeded(client, expected_min=30, timeout_s=120.0)
+        log.info("[boot] fleet seed complete: %d trucks", seen)
+
+        # Optimize. If we somehow still got 0 routes (e.g. no critical
+        # containers yet because the sensor sim hasn't aged them up),
+        # retry every 15s for up to 3 minutes.
+        for attempt in range(12):
+            ok = await trigger_optimize(client)
+            if ok:
+                break
+            log.info("[boot] optimize generated 0 routes, retrying in 15s...")
+            await asyncio.sleep(15)
 
         # Main loop
         while True:

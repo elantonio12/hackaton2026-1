@@ -164,6 +164,23 @@ async def create_truck(
             detail=f"Ya existe un camion con id {payload.id}",
         )
 
+    # Validate that the depot coordinates fall inside the declared zone.
+    from app.services.geo import find_alcaldia
+    actual_zone = find_alcaldia(payload.depot_lat, payload.depot_lon)
+    if actual_zone is None:
+        raise HTTPException(
+            status_code=422,
+            detail="El deposito esta fuera de la Ciudad de Mexico",
+        )
+    if actual_zone != payload.zone:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"El deposito pertenece a '{actual_zone}', "
+                f"no a '{payload.zone}'. Corrige zone o las coordenadas."
+            ),
+        )
+
     email = payload.recolector_email.lower()
     sub = f"local|{email}"
 
@@ -226,11 +243,41 @@ async def patch_truck(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Update mutable fields of a truck (name, zone, depot, capacity, status)."""
+    """Update mutable fields of a truck (name, zone, depot, capacity, status).
+
+    If depot coordinates or zone change, re-validate the depot vs the
+    polygon-based alcaldia. Editing only name/capacity/status skips the
+    geo check.
+    """
     truck = await _get_truck(db, truck_id)
     if not truck:
         raise HTTPException(status_code=404, detail="Camion no encontrado")
-    for field, value in updates.model_dump(exclude_unset=True).items():
+
+    patch = updates.model_dump(exclude_unset=True)
+
+    # Geo re-validation if any spatial field is being touched
+    spatial_fields = {"depot_lat", "depot_lon", "zone"}
+    if spatial_fields & patch.keys():
+        new_lat = patch.get("depot_lat", truck.depot_lat)
+        new_lon = patch.get("depot_lon", truck.depot_lon)
+        new_zone = patch.get("zone", truck.zone)
+        from app.services.geo import find_alcaldia
+        actual_zone = find_alcaldia(new_lat, new_lon)
+        if actual_zone is None:
+            raise HTTPException(
+                status_code=422,
+                detail="El deposito esta fuera de la Ciudad de Mexico",
+            )
+        if actual_zone != new_zone:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"El deposito pertenece a '{actual_zone}', "
+                    f"no a '{new_zone}'. Corrige zone o las coordenadas."
+                ),
+            )
+
+    for field, value in patch.items():
         setattr(truck, field, value)
     truck.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -329,6 +376,13 @@ async def report_collection(
                     stop = {**stop, "status": "collected"}
                 updated_stops.append(stop)
             route.stops = updated_stops
+
+    # 3) record the collection in the in-memory buffer so the IoT sensor
+    # simulator can pick it up on its next poll and reset its local state.
+    # Without this step, the simulator keeps posting the pre-collection
+    # fill level and overwrites the 0.05 reset within ~10 seconds.
+    from app.services.collections_buffer import recent_collections
+    recent_collections.record(container_id)
 
     await db.commit()
     return {"status": "ok"}

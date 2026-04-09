@@ -156,6 +156,7 @@ import { adminNav } from '../../lib/nav';
     apiCreateTruck,
     apiUpdateTruck,
     apiDeleteTruck,
+    apiLookupAlcaldia,
   } from '../../lib/api';
   import type { TruckOut } from '../../lib/api';
 
@@ -374,11 +375,33 @@ import { adminNav } from '../../lib/nav';
     }
   }
 
+  // Auto-detect alcaldia from depot coordinates
+  async function autoDetectZone() {
+    const lat = parseFloat(($('f-lat') as HTMLInputElement).value);
+    const lon = parseFloat(($('f-lon') as HTMLInputElement).value);
+    if (isNaN(lat) || isNaN(lon)) return;
+    try {
+      const zone = await apiLookupAlcaldia(lat, lon);
+      const select = $('f-zone') as HTMLSelectElement;
+      if (zone) {
+        select.value = zone;
+        $('modal-error').classList.add('hidden');
+      } else {
+        $('modal-error').textContent = 'El deposito esta fuera de CDMX';
+        $('modal-error').classList.remove('hidden');
+      }
+    } catch {
+      // Silent: backend will catch on submit anyway
+    }
+  }
+
   // Wire UI
   $('new-truck-btn').addEventListener('click', openCreateModal);
   $('modal-close').addEventListener('click', closeModal);
   $('modal-cancel').addEventListener('click', closeModal);
   $('truck-form').addEventListener('submit', handleSubmit);
+  $('f-lat').addEventListener('blur', autoDetectZone);
+  $('f-lon').addEventListener('blur', autoDetectZone);
   $('search-input').addEventListener('input', (e) => {
     renderList((e.target as HTMLInputElement).value);
   });

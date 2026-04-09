@@ -46,6 +46,7 @@ IPV6_CLIENTS = int(os.environ.get("IPV6_CLIENTS", "100"))
 BULK_ENDPOINT = f"{BACKEND_URL}/api/v1/containers/readings/bulk"
 SINGLE_ENDPOINT = f"{BACKEND_URL}/api/v1/containers/readings"
 REGISTRY_ENDPOINT = f"{BACKEND_URL}/api/v1/sensors/registry"
+COLLECTIONS_ENDPOINT = f"{BACKEND_URL}/api/v1/sensors/recent-collections"
 
 
 def _advance_fill_level(container: dict) -> None:
@@ -84,6 +85,37 @@ def _build_clients() -> list[httpx.AsyncClient]:
         transport = httpx.AsyncHTTPTransport(local_address=src_addr)
         clients.append(httpx.AsyncClient(transport=transport, timeout=10.0))
     return clients
+
+
+async def _sync_recent_collections(
+    client: httpx.AsyncClient, since_ts: float
+) -> tuple[int, float]:
+    """Pull the list of containers trucks have collected since `since_ts`
+    and reset the local fill_level for each so the next post cycle
+    doesn't overwrite the backend's reset.
+
+    Returns (reset_count, new_since_ts) where new_since_ts is the
+    server's reported now timestamp — caller passes that as `since_ts`
+    next time so we don't reset the same container twice.
+    """
+    try:
+        resp = await client.get(f"{COLLECTIONS_ENDPOINT}?since_ts={since_ts}")
+        if resp.status_code != 200:
+            return (0, since_ts)
+        body = resp.json()
+    except Exception as e:
+        print(f"[collections] sync failed: {e}")
+        return (0, since_ts)
+
+    new_since = float(body.get("now_ts", since_ts))
+    reset = 0
+    for entry in body.get("collections", []):
+        cid = entry.get("container_id")
+        if cid and cid in CONTAINERS:
+            # Match the truck collect semantic: emptied but not perfectly clean.
+            CONTAINERS[cid]["fill_level"] = round(random.uniform(0.02, 0.08), 3)
+            reset += 1
+    return (reset, new_since)
 
 
 async def _sync_with_registry(client: httpx.AsyncClient) -> tuple[int, int]:
@@ -173,6 +205,12 @@ async def main() -> None:
         if added > 0:
             print(f"[discovery] initial sync added {added} sensors -> {len(CONTAINERS)} total")
 
+        # Track the last collection-sync timestamp so subsequent calls
+        # only return events newer than what we already processed.
+        # Start from 0 so the very first cycle picks up any collections
+        # that happened while the simulator was offline.
+        collections_since_ts = 0.0
+
         cycle = 0
         while True:
             cycle += 1
@@ -183,6 +221,17 @@ async def main() -> None:
                 added, removed = await _sync_with_registry(clients[0])
                 if added or removed:
                     print(f"[discovery] +{added} -{removed} -> {len(CONTAINERS)} total")
+
+            # Sync recent truck collections BEFORE advancing fill levels.
+            # This is the critical step: when a truck collected a container,
+            # we have to overwrite our local state with ~0.05 BEFORE the
+            # next _advance_fill_level call, otherwise we'd post the
+            # pre-collection level back to the backend and undo the reset.
+            reset_count, collections_since_ts = await _sync_recent_collections(
+                clients[0], collections_since_ts
+            )
+            if reset_count > 0:
+                print(f"[collections] reset {reset_count} containers locally after truck pickup")
 
             # Update fill levels (snapshot values() so we don't iterate
             # while the discovery loop mutates the dict).
