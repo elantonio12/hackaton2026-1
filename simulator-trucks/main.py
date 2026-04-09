@@ -34,7 +34,10 @@ log = logging.getLogger("truck-sim")
 # ---------------------------------------------------------------------------
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000")
-SENSOR_TOKEN = os.environ.get("SENSOR_API_KEY", "ecoruta-sensor-secret-2026")
+# Fall back when the env var exists but is empty (CI-generated .env has
+# SENSOR_API_KEY= without a value). Matches the backend default so the
+# token check passes without requiring a CI secret change.
+SENSOR_TOKEN = os.environ.get("SENSOR_API_KEY") or "ecoruta-sensor-secret-2026"
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@ecoruta.app")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 

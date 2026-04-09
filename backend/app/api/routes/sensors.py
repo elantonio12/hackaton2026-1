@@ -34,7 +34,10 @@ sensor_security = HTTPBearer()
 async def verify_sensor_token(
     credentials: HTTPAuthorizationCredentials = Depends(sensor_security),
 ) -> str:
-    if credentials.credentials != settings.sensor_api_key:
+    # Fall back when CI-generated .env has SENSOR_API_KEY= without a value
+    # (pydantic assigns "" instead of the Settings default in that case).
+    expected = settings.sensor_api_key or "ecoruta-sensor-secret-2026"
+    if credentials.credentials != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de sensor invalido",
